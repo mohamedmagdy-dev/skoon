@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sukoon</string>
+    <string name="accessibility_service_label">Sukoon — Fingerprint Tasbih</string>
+    <string name="accessibility_service_desc">Allows Sukoon to detect rear fingerprint sensor gestures for counting in the Tasbih tab on supported devices.</string>
+</resources>

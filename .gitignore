@@ -1,0 +1,32 @@
+# Local SDKs & Toolchains
+.tools/
+
+# Signing Keystores & Secrets (NEVER commit)
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# Android / Gradle build outputs
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# IDE & Editors
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS Junk
+.DS_Store
+Thumbs.db
+desktop.ini

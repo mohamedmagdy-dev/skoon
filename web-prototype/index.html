@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>سكون — لانشر مينيماليست</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@200;300;400;500;600&family=Inter:wght@200;300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="stage">
+    <!-- Desktop Companion Guide (Hidden on Mobile) -->
+    <aside class="desktop-guide">
+      <div class="guide-brand">
+        <span class="guide-dot"></span>
+        <div>
+          <h1>سكون</h1>
+          <p>الإصدار ٢ — تابات مستقلة وقابلة للترتيب</p>
+        </div>
+      </div>
+
+      <div class="guide-section">
+        <h2>التابات والتنقل السريع</h2>
+        <ul class="gesture-list" id="desktopNavList"></ul>
+        <div class="guide-vertical-hints">
+          <button class="guide-mini-btn" id="guideOpenDrawer">↑ درج التطبيقات</button>
+          <button class="guide-mini-btn" id="guideOpenSearch">↓ البحث السريع</button>
+        </div>
+      </div>
+
+      <div class="guide-section">
+        <h2>الإعدادات والتخصيص</h2>
+        <div class="guide-controls">
+          <button id="openSettingsDesktopBtn" class="control-pill accent-pill">
+            <span>إعادة ترتيب التابات والإعدادات</span>
+            <span class="pill-badge">فتح</span>
+          </button>
+          <button id="themeToggleBtn" class="control-pill">
+            <span>الوضع الفاتح / الداكن</span>
+            <span id="themeLabel" class="pill-badge">داكن OLED</span>
+          </button>
+          <button id="focusModeDesktopBtn" class="control-pill">
+            <span>وضع التركيز (Focus)</span>
+            <span id="focusLabelDesktop" class="pill-badge">متوقف</span>
+          </button>
+          <button id="resetDemoBtn" class="control-pill subtle">
+            <span>إعادة ضبط البيانات الافتراضية</span>
+          </button>
+        </div>
+      </div>
+
+      <p class="guide-hint">
+        في تابة <strong>الأذكار</strong>: اضغط على <strong>دائرة البصمة</strong> أسفل الشاشة (أو زر المسافة) للعد، ويمكنك ضبط ارتفاعها من الإعدادات.
+      </p>
+    </aside>
+
+    <!-- Phone Hardware Shell -->
+    <main class="phone-shell" id="phoneShell">
+      <div class="phone-notch" aria-hidden="true"></div>
+
+      <!-- Status Bar -->
+      <header class="status-bar">
+        <span class="status-time" id="statusTime">١٤:٥٢</span>
+        <div class="status-right">
+          <span class="status-focus-dot" id="statusFocusDot" title="وضع التركيز مفعل"></span>
+          <span class="status-text">5G</span>
+          <span class="status-battery">٨٤٪</span>
+        </div>
+      </header>
+
+      <!-- Dynamic Multi-Page Horizontal Viewport -->
+      <div class="viewport" id="viewport">
+        <div class="pages-track" id="pagesTrack">
+
+          <!-- PAGE: POMODORO -->
+          <section class="page page-pomodoro" data-page-id="pomodoro" dir="rtl" aria-label="البومودورو">
+            <div class="pomo-page-inner">
+              <div class="section-top-row">
+                <div>
+                  <span class="eyebrow">جلسة عميقة</span>
+                  <h2 class="page-title">البومودورو</h2>
+                </div>
+                <span class="subtle-counter" id="pomoSessionsCount">جلسات اليوم: ٢</span>
+              </div>
+
+              <div class="pomo-modes" id="pomoModes">
+                <button class="mode-chip active" data-minutes="25" data-label="تركيز">تركيز ٢٥</button>
+                <button class="mode-chip" data-minutes="5" data-label="راحة قصيرة">راحة ٥</button>
+                <button class="mode-chip" data-minutes="15" data-label="راحة طويلة">راحة ١٥</button>
+              </div>
+
+              <div class="pomo-ring-wrap">
+                <svg class="pomo-svg" viewBox="0 0 220 220" aria-hidden="true">
+                  <circle class="ring-bg" cx="110" cy="110" r="96"></circle>
+                  <circle class="ring-progress" id="pomoRingProgress" cx="110" cy="110" r="96"></circle>
+                </svg>
+                <div class="pomo-center-text">
+                  <div class="pomo-big-time" id="pomoDisplay">25:00</div>
+                  <div class="pomo-status-label" id="pomoStatus">جاهز للتركيز</div>
+                </div>
+              </div>
+
+              <input type="text" id="pomoTaskInput" class="pomo-intention-input" placeholder="بتركز على إيه في الجلسة دي؟" autocomplete="off" />
+
+              <div class="pomo-big-actions">
+                <button class="primary-action-btn" id="pomoStartBtn">ابدأ الجلسة</button>
+                <button class="secondary-action-btn" id="pomoResetBtn">إعادة</button>
+              </div>
+
+              <label class="inline-toggle-row">
+                <span>تفعيل وضع التركيز تلقائياً مع الجلسة</span>
+                <input type="checkbox" id="pomoAutoFocusToggle" />
+                <span class="mini-switch"></span>
+              </label>
+            </div>
+          </section>
+
+          <!-- PAGE: NOTES -->
+          <section class="page page-notes" data-page-id="notes" dir="rtl" aria-label="الملاحظات">
+            <div class="notes-page-inner">
+              <!-- Notes List View -->
+              <div class="notes-list-view" id="notesListView">
+                <div class="section-top-row">
+                  <div>
+                    <span class="eyebrow">أفكار سريعة</span>
+                    <h2 class="page-title">الملاحظات</h2>
+                  </div>
+                  <button class="q-icon-btn active" id="addNoteBtn">+ جديد</button>
+                </div>
+                <div class="notes-grid" id="notesGrid"></div>
+              </div>
+
+              <!-- Note Editor View -->
+              <div class="note-editor-view" id="noteEditorView" aria-hidden="true">
+                <div class="editor-top">
+                  <button class="text-btn" id="closeNoteEditorBtn">→ رجوع</button>
+                  <div class="editor-actions">
+                    <button class="q-icon-btn" id="pinNoteBtn">تثبيت</button>
+                    <button class="q-icon-btn danger-btn" id="deleteNoteBtn">حذف</button>
+                  </div>
+                </div>
+                <input type="text" id="noteTitleInput" class="note-title-field" placeholder="عنوان الملاحظة..." autocomplete="off" />
+                <textarea id="noteBodyInput" class="note-body-field" placeholder="اكتب ملاحظتك هنا... تُحفظ تلقائياً"></textarea>
+                <div class="editor-footer">
+                  <span id="noteSaveHint">محفوظة تلقائياً</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- PAGE: DAILY RECURRING HABITS / TASKS -->
+          <section class="page page-habits" data-page-id="habits" dir="rtl" aria-label="المهام اليومية">
+            <div class="habits-page-inner">
+              <div class="section-top-row">
+                <div>
+                  <span class="eyebrow">تتكرر يومياً</span>
+                  <h2 class="page-title">المهام اليومية</h2>
+                </div>
+                <button class="q-icon-btn" id="newDayHabitsBtn" title="تصفير اليوم وتحديث الاستمرارية">يوم جديد ↻</button>
+              </div>
+
+              <div class="wird-progress-bar">
+                <div class="wird-progress-info">
+                  <span id="habitsProgressText">تم إنجاز ٢ من ٥ اليوم</span>
+                  <span class="wird-streak" id="habitsPercent">٤٠٪</span>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-fill" id="habitsProgressFill" style="width: 40%"></div>
+                </div>
+              </div>
+
+              <ul class="habits-list" id="habitsList"></ul>
+
+              <form class="habit-add-form" id="habitAddForm">
+                <input type="text" id="habitInput" placeholder="أضف مهمة تتكرر كل يوم..." maxlength="48" autocomplete="off" />
+                <button type="submit" class="q-icon-btn active">إضافة</button>
+              </form>
+            </div>
+          </section>
+
+          <!-- PAGE: HOME SCREEN -->
+          <section class="page page-home" data-page-id="home" dir="rtl" aria-label="الشاشة الرئيسية">
+            <div class="home-inner">
+              <div class="home-header">
+                <div class="clock-block">
+                  <div class="home-clock" id="homeClock">14:52</div>
+                  <div class="home-dates">
+                    <span id="gregorianDate">الأحد، ٢٢ نوفمبر</span>
+                    <span class="sep">•</span>
+                    <span id="hijriDate">١٢ جمادى الآخرة</span>
+                  </div>
+                </div>
+
+                <div class="glance-pills">
+                  <button class="glance-pill" id="prayerPill" title="الانتقال للورد القرآني">
+                    <span class="pill-dot warm"></span>
+                    <span>العصر بعد ١ س ١٢ د</span>
+                  </button>
+                  <button class="glance-pill" id="focusPill">
+                    <span class="pill-dot" id="focusPillDot"></span>
+                    <span id="focusPillText">وضع عادي</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Minimalist Text-Only Favorites -->
+              <div class="favorites-wrap">
+                <div class="favorites-header">
+                  <span class="favorites-label">المفضلة</span>
+                  <div class="fav-header-actions">
+                    <button class="edit-fav-btn" id="editFavBtn">تعديل</button>
+                    <button class="edit-fav-btn" id="openSettingsHomeBtn">الإعدادات</button>
+                  </div>
+                </div>
+                <ul class="favorites-list" id="favoritesList"></ul>
+              </div>
+
+              <!-- Dynamic Edge Hints -->
+              <div class="home-footer">
+                <button class="edge-hint warm-hint" id="hintRightTab">‹ الورد</button>
+                <button class="drawer-trigger" id="openDrawerBtn">كل التطبيقات ↑</button>
+                <button class="edge-hint" id="hintLeftTab">المهام ›</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- PAGE: QURAN WIRD -->
+          <section class="page page-quran" data-page-id="quran" dir="rtl" aria-label="الورد القرآني">
+            <div class="quran-inner">
+              <div class="quran-top">
+                <div class="quran-meta-row">
+                  <div>
+                    <span class="quran-surah" id="quranSurah">سورة الضحى والشرح</span>
+                    <span class="quran-juz" id="quranJuz">الجزء ٣٠ • صفحة ٥٩٦</span>
+                  </div>
+                  <div class="quran-controls">
+                    <button class="q-icon-btn" id="quranFontDec" title="تصغير الخط">أ-</button>
+                    <button class="q-icon-btn" id="quranFontInc" title="تكبير الخط">أ+</button>
+                    <button class="q-icon-btn" id="quranPaperToggle" title="لون الورق">ورق</button>
+                  </div>
+                </div>
+
+                <div class="wird-progress-bar">
+                  <div class="wird-progress-info">
+                    <span id="wirdProgressText">الورد اليومي: صفحة ٣ من ٤</span>
+                    <span class="wird-streak" id="wirdStreak">٧ أيام متتالية</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill" id="wirdProgressFill" style="width: 75%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <article class="mushaf-sheet" id="mushafSheet">
+                <div class="mushaf-content" id="mushafContent"></div>
+              </article>
+
+              <div class="quran-bottom">
+                <button class="q-nav-btn" id="quranPrevBtn">→ السابقة</button>
+                <button class="q-done-btn" id="quranDoneBtn">أتممت الورد ✓</button>
+                <button class="q-nav-btn" id="quranNextBtn">التالية ←</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- PAGE: DHIKR & FINGERPRINT-ZONE TASBIH -->
+          <section class="page page-dhikr" data-page-id="dhikr" dir="rtl" aria-label="الأذكار والمسبحة">
+            <div class="dhikr-page-inner">
+              <div class="section-top-row">
+                <div>
+                  <span class="eyebrow">طمأنينة وذكر</span>
+                  <h2 class="page-title">الأذكار</h2>
+                </div>
+                <button class="q-icon-btn active" id="toggleAddDhikrBtn">+ ذكر</button>
+              </div>
+
+              <!-- Add Custom Dhikr Inline Form -->
+              <form class="dhikr-add-form" id="dhikrAddForm" hidden>
+                <input type="text" id="newDhikrText" placeholder="نص الذكر (مثلاً: لا حول ولا قوة إلا بالله)" required autocomplete="off" />
+                <div class="dhikr-add-row">
+                  <input type="number" id="newDhikrTarget" min="1" max="10000" value="33" placeholder="العدد" required />
+                  <button type="submit" class="q-icon-btn active">حفظ</button>
+                  <button type="button" class="q-icon-btn" id="cancelAddDhikrBtn">إلغاء</button>
+                </div>
+              </form>
+
+              <!-- Selector Pills -->
+              <div class="dhikr-pills" id="dhikrPills"></div>
+
+              <!-- Active Dhikr Display -->
+              <div class="dhikr-stage">
+                <p class="dhikr-phrase" id="dhikrPhrase">سبحان الله</p>
+                <div class="dhikr-count-row">
+                  <span class="dhikr-current" id="dhikrCurrent">٠</span>
+                  <span class="dhikr-slash">/</span>
+                  <span class="dhikr-target-val" id="dhikrTargetVal">٣٣</span>
+                </div>
+                <div class="dhikr-mini-controls">
+                  <button class="q-icon-btn" id="dhikrTargetDec" title="إنقاص التارجت">- التارجت</button>
+                  <button class="q-icon-btn" id="dhikrTargetInc" title="زيادة التارجت">+ التارجت</button>
+                  <button class="q-icon-btn" id="dhikrResetBtn">تصفير</button>
+                  <button class="q-icon-btn danger-btn" id="dhikrDeleteBtn" hidden>حذف</button>
+                </div>
+              </div>
+
+              <!-- Fingerprint-Zone Tactile Counter -->
+              <div class="fp-zone" id="fpZone">
+                <button class="fp-counter-btn" id="fpCounterBtn" aria-label="اضغط للعد">
+                  <svg class="fp-ring-svg" viewBox="0 0 120 120" aria-hidden="true">
+                    <circle class="fp-ring-bg" cx="60" cy="60" r="54"></circle>
+                    <circle class="fp-ring-fill" id="fpRingFill" cx="60" cy="60" r="54"></circle>
+                  </svg>
+                  <!-- Subtle Fingerprint Arcs -->
+                  <svg class="fp-icon-svg" viewBox="0 0 48 48" aria-hidden="true">
+                    <path d="M24 10c-7.7 0-14 6.3-14 14v3" />
+                    <path d="M24 10c7.7 0 14 6.3 14 14v2" />
+                    <path d="M24 16c-4.4 0-8 3.6-8 8v7" />
+                    <path d="M24 16c4.4 0 8 3.6 8 8v5" />
+                    <path d="M24 22c-1.1 0-2 .9-2 2v11" />
+                    <path d="M24 22c1.1 0 2 .9 2 2v9" />
+                  </svg>
+                  <span class="fp-ripple" id="fpRipple"></span>
+                </button>
+                <span class="fp-hint">اضغط مكان البصمة للعد • ينقل تلقائياً عند الإتمام</span>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+      <!-- Dynamic Page Indicator Dots -->
+      <div class="page-dots" id="pageDots" aria-label="التنقل بين الصفحات"></div>
+
+      <!-- OVERLAY 1: App Drawer (Swipe Up) -->
+      <div class="overlay drawer-overlay" id="drawerOverlay" dir="rtl" aria-hidden="true">
+        <div class="overlay-handle" id="drawerHandle"></div>
+        <div class="drawer-header">
+          <input type="text" id="drawerSearch" class="minimal-search" placeholder="ابحث في التطبيقات..." autocomplete="off" />
+          <button class="text-btn" id="closeDrawerBtn">إغلاق</button>
+        </div>
+        <p class="drawer-tip">اضغط على ★ لإضافة أو إزالة التطبيق من المفضلة</p>
+        <div class="drawer-list" id="drawerList"></div>
+      </div>
+
+      <!-- OVERLAY 2: Universal Search (Swipe Down) -->
+      <div class="overlay search-overlay" id="searchOverlay" dir="rtl" aria-hidden="true">
+        <div class="search-top">
+          <input type="text" id="universalSearchInput" class="minimal-search large" placeholder="تطبيق، تابة، جهة اتصال، أو حساب (25*4)..." autocomplete="off" />
+          <button class="text-btn" id="closeSearchBtn">إلغاء</button>
+        </div>
+        <div class="search-results" id="universalSearchResults"></div>
+      </div>
+
+      <!-- OVERLAY 3: Settings & Tab Reorder -->
+      <div class="overlay settings-overlay" id="settingsOverlay" dir="rtl" aria-hidden="true">
+        <div class="settings-header">
+          <div>
+            <span class="eyebrow">تخصيص سكون</span>
+            <h2 class="page-title">الإعدادات وترتيب التابات</h2>
+          </div>
+          <button class="text-btn" id="closeSettingsBtn">تم</button>
+        </div>
+
+        <div class="settings-scroll">
+          <div class="settings-block">
+            <h3 class="settings-heading">ترتيب التابات (يمين وشمال الرئيسية)</h3>
+            <p class="settings-sub">حرّك أي تابة لأعلى لتكون على يمين الرئيسية، أو لأسفل لتكون على شمالها.</p>
+            <ul class="reorder-list" id="reorderList"></ul>
+          </div>
+
+          <div class="settings-block">
+            <h3 class="settings-heading">موضع دائرة البصمة (تابة الأذكار)</h3>
+            <div class="slider-row">
+              <span>منخفض</span>
+              <input type="range" id="fpOffsetSlider" min="0" max="64" value="14" />
+              <span>مرتفع</span>
+            </div>
+          </div>
+
+          <div class="settings-block">
+            <h3 class="settings-heading">المظهر</h3>
+            <div class="settings-btn-row">
+              <button class="q-icon-btn" id="settingsThemeDark">داكن OLED</button>
+              <button class="q-icon-btn" id="settingsThemeLight">فاتح ورقي</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Mindful Pause -->
+      <div class="modal-backdrop" id="mindfulModal" dir="rtl" aria-hidden="true">
+        <div class="mindful-card">
+          <div class="breath-ring">
+            <span id="mindfulCountdown">5</span>
+          </div>
+          <h3 id="mindfulTitle">وقفة تأمل</h3>
+          <p id="mindfulQuestion">هل فعلاً محتاج تفتح التطبيق ده دلوقتي؟</p>
+          <div class="mindful-actions">
+            <button class="mindful-btn primary" id="mindfulStayBtn">رجوع للهدوء</button>
+            <button class="mindful-btn secondary" id="mindfulProceedBtn" disabled>انتظر ٥ ثواني...</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Simulated App Launch -->
+      <div class="app-launch-screen" id="appLaunchScreen" dir="rtl" aria-hidden="true">
+        <div class="launch-inner">
+          <span class="launch-eyebrow">تم فتح التطبيق</span>
+          <h2 id="launchAppName">الملاحظات</h2>
+          <p id="launchAppNote">معاينة تفاعلية داخل نموذج سكون</p>
+          <button class="mindful-btn primary" id="launchBackBtn">العودة للانشر</button>
+        </div>
+      </div>
+
+      <!-- Subtle Toast -->
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+      <!-- Home Indicator Pill -->
+      <div class="home-indicator" id="homeIndicator" title="العودة للرئيسية"></div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
