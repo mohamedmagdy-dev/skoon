@@ -1,25 +1,36 @@
-# Sukoon (سكون) — Minimalist Islamic Android Launcher
+# سكون (Sukoon) — لانشر أندرويد مينيماليست هادئ
 
-A calm, distraction-free Android home screen launcher built with **Kotlin & Jetpack Compose**, paired with an interactive **Web Prototype** for rapid UI/UX iteration.
+لانشر أندرويد بسيط وخالٍ من المشتتات، مبني باستخدام **Kotlin و Jetpack Compose**، مع نسخة **نموذج ويب تفاعلي (Web Prototype)** لتصميم وتجربة الواجهات بسرعة قبل تطبيقها في التطبيق الأساسي.
 
-## Features
-- **Zero-Icon Minimalist Home**: Text-only favorites, Focus Mode (hides distracting apps), and a 5-second Mindful Pause for distracting apps.
-- **Offline Prayer Times**: Astronomical prayer calculation for 55+ cities (Egypt, Arab world & international) with countdown pill and expandable 5-prayer schedule.
-- **Full 604-Page Quran Reader**: Offline Mushaf in Amiri script with smart auto-fit typography, adjustable font size, Paper mode, and customizable line spacing.
-- **Morning & Evening Azkar**: Auto time-of-day switching, progress tracking, tactile counting cards, and AMOLED Black-Screen mode.
-- **Tasbih / Dhikr Counter**: Custom Adhkar, circular progress ring, haptic feedback, AMOLED Black-Screen mode, and optional rear fingerprint sensor gesture support.
-- **Daily Habits, Notes & Pomodoro**: Recurring daily habits with streaks, instant auto-saving notes with pinning, and a Pomodoro timer integrated with Focus Mode.
-- **Full Customization**: Bilingual UI (**Arabic RTL** & **English LTR**), 5 switchable app fonts (`IBM Plex`, `Tajawal`, `Almarai`, `Amiri`, `System Sans`), Dark OLED / Light Paper themes, and reorderable tabs.
+## المميزات الرئيسية
+- **شاشة رئيسية بدون أيقونات (Zero-Icon Minimalism)**: قائمة تطبيقات نصية هادئة، مع **وضع التركيز (Focus Mode)** لإخفاء التطبيقات المشتتة، و**وقفة التأمل (5 ثوانٍ)** قبل فتح التطبيقات التي تستهلك وقتك.
+- **مواقيت الصلاة بدون إنترنت**: حساب فلكي دقيق لمواقيت الصلاة لأكثر من **55 مدينة** (جميع محافظات مصر والمدن العربية والعالمية) مع عدّاد للصلاة القادمة وجدول الصلوات الخمس.
+- **المصحف الكامل (604 صفحة)**: قراءة القرآن الكريم بدون إنترنت بخط **أميري** الواضح، مع ضبط حجم الخط، الوضع الورقي المريح للعين، والتحكم في تباعد السطور.
+- **أذكار الصباح والمساء**: تبديل تلقائي حسب الوقت، شريط إنجاز، عدّاد باللمس مع اهتزاز خفيف، و**وضع الشاشة السوداء (AMOLED)** للتسبيح والذكر بدون إضاءة.
+- **المسبحة والأذكار**: أذكار مخصصة، عدّاد دائري تفاعلي، وضع الشاشة السوداء، ودعم اختياري للعد عبر حساس البصمة الخلفي على الأجهزة المدعومة.
+- **المهام اليومية والملاحظات والبومودورو**: مهام يومية متكررة مع عدّاد استمرارية (Streak)، ملاحظات سريعة تحفظ تلقائياً مع التثبيت، ومؤقت بومودورو مدمج مع وضع التركيز.
+- **تخصيص كامل**:
+  - تبديل فوري بين **العربية** و**الإنجليزية**.
+  - 5 خطوط قابلة للتغيير في التطبيق (`IBM Plex`، `تجوال`، `المراعي`، `أميري`، `خط النظام`).
+  - مظهر **داكن OLED** ومظهر **فاتح ورقي**.
+  - إعادة ترتيب وإخفاء/إظهار التابات يمين وشمال الشاشة الرئيسية.
 
-## Repository Structure
+## هيكلة المشروع
 ```text
-├── android/          # Native Android Launcher (Kotlin, Jetpack Compose, Material 3)
-└── web-prototype/    # Interactive HTML/CSS/JS prototype for UI/UX design & iteration
+├── android/          # تطبيق الأندرويد الأساسي (Kotlin + Jetpack Compose + Material 3)
+└── web-prototype/    # نموذج الويب التفاعلي (HTML / CSS / JS) لتجربة وتطوير الـ UI/UX
 ```
 
-## Building the Android App
-1. Open `android/` in Android Studio (JDK 17, Compile SDK 35, Min SDK 26).
-2. Run `./gradlew assembleDebug` (or `./gradlew assembleRelease` with your signing keystore).
+## بناء تطبيق الأندرويد
+1. افتح مجلد `android/` في **Android Studio** (يتطلب `JDK 17`، `Compile SDK 35`، `Min SDK 26`).
+2. لبناء نسخة تجريبية:
+   ```bash
+   ./gradlew assembleDebug
+   ```
+3. لبناء نسخة Release موقّعة، أضف ملف `android/signing.properties` ببيانات التوقيع الخاصة بك ثم نفّذ:
+   ```bash
+   ./gradlew assembleRelease
+   ```
 
-## Running the Web Prototype
-Open `web-prototype/index.html` directly in any modern browser or serve it via a local static server.
+## تشغيل نموذج الويب (Web Prototype)
+افتح الملف `web-prototype/index.html` مباشرة في المتصفح أو شغّله عبر أي خادم محلي بسيط.
