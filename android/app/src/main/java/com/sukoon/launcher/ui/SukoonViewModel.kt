@@ -497,7 +497,7 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
         stopMuezzinPreview()
         updateState { s ->
             s.copy(
-                onboardingStep = step.coerceIn(0, 8),
+                onboardingStep = step.coerceIn(0, 9),
                 onboardingStatus = if (s.onboardingStatus == "not_started" && step > 0) "in_progress" else s.onboardingStatus
             )
         }
@@ -506,6 +506,12 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     fun completeOnboarding() {
         stopMuezzinPreview()
         updateState { it.copy(onboardingStatus = "completed", onboardingStep = 0) }
+    }
+
+    fun skipOnboardingWithDefaults() {
+        stopMuezzinPreview()
+        updateState { it.copy(onboardingStatus = "completed", onboardingStep = 0) }
+        showToast(strings.toastEnteredDefaults)
     }
 
     fun restartSetup() {

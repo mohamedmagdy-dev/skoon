@@ -342,6 +342,7 @@ class MainActivity : ComponentActivity() {
                             onSetPrayerAutoFocusMinutes = { viewModel.setPrayerAutoFocusMinutes(it) },
                             onSetMindfulDuration = { viewModel.setMindfulPauseSeconds(it) },
                             onToggleMindfulTimeBox = { viewModel.setMindfulTimeBoxEnabled(it) },
+                            onSkipWithDefaults = { viewModel.skipOnboardingWithDefaults() },
                             onComplete = { viewModel.completeOnboarding() }
                         )
                     } else {

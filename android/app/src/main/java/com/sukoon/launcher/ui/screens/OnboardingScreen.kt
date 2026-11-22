@@ -60,6 +60,7 @@ fun OnboardingScreen(
     onSetPrayerAutoFocusMinutes: (Int) -> Unit,
     onSetMindfulDuration: (Int) -> Unit,
     onToggleMindfulTimeBox: (Boolean) -> Unit,
+    onSkipWithDefaults: () -> Unit,
     onComplete: () -> Unit
 ) {
     val colors = LocalSukoonColors.current
@@ -109,6 +110,7 @@ fun OnboardingScreen(
     }
 
     var cityQuery by remember { mutableStateOf("") }
+    var tourSlide by remember { mutableIntStateOf(0) }
     val selectedCity = remember(state.prayerCityId, state.useGpsLocation, state.customLat, state.customLng, state.customLocationLabel) {
         PrayerTimesCalculator.resolveCityForState(state)
     }
@@ -156,7 +158,10 @@ fun OnboardingScreen(
                         color = colors.textSecondary,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onSetStep(step - 1) }
+                            .clickable {
+                                if (step == 2 && tourSlide > 0) tourSlide -= 1
+                                else onSetStep(step - 1)
+                            }
                             .padding(vertical = 8.dp, horizontal = 4.dp)
                     )
                 } else {
@@ -168,14 +173,14 @@ fun OnboardingScreen(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    for (i in 1..8) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (i in 1..9) {
                         val active = i == step
                         val passed = i < step
                         Box(
                             modifier = Modifier
                                 .height(3.dp)
-                                .width(if (active) 20.dp else 8.dp)
+                                .width(if (active) 18.dp else 7.dp)
                                 .clip(RoundedCornerShape(50))
                                 .background(
                                     when {
@@ -188,8 +193,18 @@ fun OnboardingScreen(
                     }
                 }
 
-                if (step == 5 || step == 6) {
-                    Text(
+                when (step) {
+                    2 -> Text(
+                        text = strings.obSkipToSetupBtn,
+                        fontFamily = appFont,
+                        fontSize = 12.sp,
+                        color = colors.accentWarm,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSetStep(3) }
+                            .padding(vertical = 8.dp, horizontal = 4.dp)
+                    )
+                    6, 7 -> Text(
                         text = strings.skipLabel,
                         fontFamily = appFont,
                         fontSize = 14.sp,
@@ -199,8 +214,7 @@ fun OnboardingScreen(
                             .clickable { onSetStep(step + 1) }
                             .padding(vertical = 8.dp, horizontal = 4.dp)
                     )
-                } else {
-                    Spacer(Modifier.width(36.dp))
+                    else -> Spacer(Modifier.width(36.dp))
                 }
             }
 
@@ -243,8 +257,141 @@ fun OnboardingScreen(
                         )
                     }
 
+                    // Screen 02B — Interactive 4-Slide Feature Walkthrough
+                    2 -> {
+                        val slides = listOf(
+                            Triple("🌙", strings.obTour1Tag, Pair(strings.obTour1Title, strings.obTour1Desc)) to strings.obTour1Points,
+                            Triple("🕌", strings.obTour2Tag, Pair(strings.obTour2Title, strings.obTour2Desc)) to strings.obTour2Points,
+                            Triple("📖", strings.obTour3Tag, Pair(strings.obTour3Title, strings.obTour3Desc)) to strings.obTour3Points,
+                            Triple("⏳", strings.obTour4Tag, Pair(strings.obTour4Title, strings.obTour4Desc)) to strings.obTour4Points
+                        )
+                        val idx = tourSlide.coerceIn(0, slides.lastIndex)
+                        val (header, points) = slides[idx]
+                        val (emoji, tag, titleDesc) = header
+                        val (title, desc) = titleDesc
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.accentWarmSoft)
+                                            .border(1.dp, colors.accentWarm.copy(alpha = 0.55f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(emoji, fontSize = 18.sp)
+                                    }
+                                    Text(
+                                        text = tag,
+                                        fontFamily = appFont,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.accentWarm
+                                    )
+                                }
+                                Text(
+                                    text = strings.obTourStepFmt(
+                                        (idx + 1).formatDigits(strings.isArabic),
+                                        slides.size.formatDigits(strings.isArabic)
+                                    ),
+                                    fontFamily = appFont,
+                                    fontSize = 11.sp,
+                                    color = colors.textMuted
+                                )
+                            }
+
+                            Text(
+                                text = title,
+                                fontFamily = appFont,
+                                fontSize = 25.sp,
+                                lineHeight = 34.sp,
+                                fontWeight = FontWeight.Light,
+                                color = colors.textPrimary
+                            )
+
+                            Text(
+                                text = desc,
+                                fontFamily = appFont,
+                                fontSize = 14.sp,
+                                lineHeight = 22.sp,
+                                color = colors.textSecondary
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                points.forEach { pt ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(colors.surface)
+                                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                                            .padding(horizontal = 14.dp, vertical = 13.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 2.dp)
+                                                .size(18.dp)
+                                                .clip(CircleShape)
+                                                .background(colors.accentWarmSoft)
+                                                .border(1.dp, colors.accentWarm, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("✓", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = colors.accentWarm)
+                                        }
+                                        Text(
+                                            text = pt,
+                                            fontFamily = appFont,
+                                            fontSize = 13.sp,
+                                            lineHeight = 20.sp,
+                                            color = colors.textPrimary,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Tour Slide Dots (clickable to jump between features)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                slides.indices.forEach { i ->
+                                    val active = i == idx
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .height(6.dp)
+                                            .width(if (active) 22.dp else 6.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (active) colors.accentWarm else colors.borderStrong)
+                                            .clickable { tourSlide = i }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Screen 03 — Language
-                    2 -> Column(
+                    3 -> Column(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -282,7 +429,7 @@ fun OnboardingScreen(
                     }
 
                     // Screen 04 — Choose Your Experience
-                    3 -> Column(
+                    4 -> Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
@@ -326,7 +473,7 @@ fun OnboardingScreen(
                     }
 
                     // Screen 05 — Appearance & Font
-                    4 -> Column(
+                    5 -> Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
@@ -489,7 +636,7 @@ fun OnboardingScreen(
                     }
 
                     // Screen 06 — Location
-                    5 -> Column(
+                    6 -> Column(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -612,7 +759,7 @@ fun OnboardingScreen(
                     }
 
                     // Screen 07 — Adhan Voice, Prayer Reminders & Essential Timings
-                    6 -> Column(
+                    7 -> Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
@@ -794,7 +941,7 @@ fun OnboardingScreen(
                     }
 
                     // Screen 08 — Customize Navigation
-                    7 -> Column(
+                    8 -> Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
@@ -902,30 +1049,62 @@ fun OnboardingScreen(
                 }
             }
 
-            // Primary Bottom CTA
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.textPrimary)
-                    .clickable {
-                        if (step < 8) onSetStep(step + 1) else onComplete()
-                    }
-                    .padding(vertical = 15.dp),
-                contentAlignment = Alignment.Center
+            // Primary Bottom CTA + Optional Instant Skip with Defaults
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = when (step) {
-                        1 -> strings.obGetStarted
-                        8 -> strings.obEnterSukoon
-                        else -> strings.nextLabel
-                    },
-                    fontFamily = appFont,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.background,
-                    textAlign = TextAlign.Center
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.textPrimary)
+                        .clickable {
+                            when {
+                                step == 1 -> {
+                                    tourSlide = 0
+                                    onSetStep(2)
+                                }
+                                step == 2 && tourSlide < 3 -> tourSlide += 1
+                                step < 9 -> onSetStep(step + 1)
+                                else -> onComplete()
+                            }
+                        }
+                        .padding(vertical = 15.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = when (step) {
+                            1 -> strings.obStartTourBtn
+                            9 -> strings.obEnterSukoon
+                            else -> strings.nextLabel
+                        },
+                        fontFamily = appFont,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.background,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                if (step in 1..8) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSkipWithDefaults() }
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = strings.obSkipDefaultsBtn,
+                            fontFamily = appFont,
+                            fontSize = 12.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }

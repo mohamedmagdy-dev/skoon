@@ -237,6 +237,27 @@ interface AppStrings {
     val stopAdhanBtn: String
     val obPrayerSetupTitle: String
     val obPrayerSetupSub: String
+    val obSkipDefaultsBtn: String
+    val obStartTourBtn: String
+    val obSkipToSetupBtn: String
+    val obTourStepFmt: (String, String) -> String
+    val obTour1Tag: String
+    val obTour1Title: String
+    val obTour1Desc: String
+    val obTour1Points: List<String>
+    val obTour2Tag: String
+    val obTour2Title: String
+    val obTour2Desc: String
+    val obTour2Points: List<String>
+    val obTour3Tag: String
+    val obTour3Title: String
+    val obTour3Desc: String
+    val obTour3Points: List<String>
+    val obTour4Tag: String
+    val obTour4Title: String
+    val obTour4Desc: String
+    val obTour4Points: List<String>
+    val toastEnteredDefaults: String
     val minutesShortFmt: (String) -> String
     val toastLocationUpdatedFmt: (String) -> String
     val toastLocationFailed: String
@@ -533,6 +554,43 @@ object ArabicStrings : AppStrings {
     override val stopAdhanBtn = "■ إيقاف الأذان"
     override val obPrayerSetupTitle = "الأذان والسكينة والتوقيت"
     override val obPrayerSetupSub = "اختر صوت المؤذن واضبط التنبيهات والدقائق الأساسية مرة واحدة قبل الدخول"
+    override val obSkipDefaultsBtn = "تخطي • الدخول بالإعدادات الافتراضية"
+    override val obStartTourBtn = "استكشف المميزات والإعداد"
+    override val obSkipToSetupBtn = "تخطي للإعدادات"
+    override val obTourStepFmt: (String, String) -> String = { cur, tot -> "ميزة $cur من $tot" }
+    override val obTour1Tag = "التركيز والهدوء"
+    override val obTour1Title = "واجهة هادئة.. بلا ضجيج أو تشتيت"
+    override val obTour1Desc = "شاشة رئيسية نظيفة تعيد لك السيطرة على وقتك وهاتفك بدون ألوان صارخة أو إشعارات مزعجة."
+    override val obTour1Points = listOf(
+        "وضع التركيز يحجب الإشعارات تماماً ويجمعها في صندوق هادئ خاص",
+        "وقفة تأمل قبل التطبيقات المشتتة مع اختيار مدة الاستخدام (٥ / ١٠ / ١٥ د)",
+        "تخصيص كامل للخطوط والثيمات وطريقة عرض التطبيقات"
+    )
+    override val obTour2Tag = "الصلاة والقبلة"
+    override val obTour2Title = "صلاتك في وقتها.. بخشوع تام"
+    override val obTour2Desc = "كل ما تحتاجه لصلواتك اليومية بدون إنترنت وبدقة عالية."
+    override val obTour2Points = listOf(
+        "الأذان بصوت مؤذنك المفضل (مكة، المدينة، العفاسي، المصري) مع إيقاف فوري بزر الباور",
+        "وضع السكينة التلقائي وقت الصلاة يحجب الإشعارات ويعود للوضع الطبيعي تلقائياً",
+        "متتبع الصلوات الخمس اليومي ✓ + بوصلة القبلة الدقيقة بدون إنترنت"
+    )
+    override val obTour3Tag = "القرآن والذكر"
+    override val obTour3Title = "وردك وأذكارك.. بمسحة إصبع"
+    override val obTour3Desc = "القرآن الكريم والأذكار والمسبحة جزء أصيل من شاشتك اليومية."
+    override val obTour3Points = listOf(
+        "المصحف الشريف كاملاً (٦٠٤ صفحة) بدون إنترنت بخط النسخ وتباعد مريح",
+        "أذكار الصباح والمساء تتبدّل تلقائياً حسب الوقت مع عداد سلس",
+        "مسبحة بشاشة سوداء AMOLED (مع دعم حساس البصمة الخلفية)"
+    )
+    override val obTour4Tag = "الإنتاجية اليومية"
+    override val obTour4Title = "أنجز مهامك.. بإيقاع متزن"
+    override val obTour4Desc = "أدوات إنتاجية مدمجة تغنيك عن التنقل بين عشرات التطبيقات."
+    override val obTour4Points = listOf(
+        "مؤقت بومودورو لجلسات التركيز العميق مع تفعيل وضع التركيز تلقائياً",
+        "متابعة المهام والعادات اليومية مع عداد الاستمرارية",
+        "ملاحظات سريعة مثبتة + بحث شامل وحاسبة فورية"
+    )
+    override val toastEnteredDefaults = "أهلاً بك في سكون — يمكنك تخصيص كل شيء من الإعدادات في أي وقت"
     override val minutesShortFmt: (String) -> String = { m -> "$m د" }
     override val toastLocationUpdatedFmt: (String) -> String = { loc -> "تم تحديد موقعك: $loc" }
     override val toastLocationFailed = "تعذر تحديد الموقع — تأكد من تفعيل GPS أو اختر مدينتك يدوياً"
@@ -828,6 +886,43 @@ object EnglishStrings : AppStrings {
     override val stopAdhanBtn = "■ Stop Adhan"
     override val obPrayerSetupTitle = "Adhan, Calm & Timings"
     override val obPrayerSetupSub = "Choose your Muezzin voice and essential durations once before entering"
+    override val obSkipDefaultsBtn = "Skip • Enter with Defaults"
+    override val obStartTourBtn = "Explore Features & Setup"
+    override val obSkipToSetupBtn = "Skip to Setup"
+    override val obTourStepFmt: (String, String) -> String = { cur, tot -> "Feature $cur of $tot" }
+    override val obTour1Tag = "FOCUS & CALM"
+    override val obTour1Title = "A calm home screen.. free of noise"
+    override val obTour1Desc = "A minimalist launcher that gives you back your attention without visual clutter or constant pings."
+    override val obTour1Points = listOf(
+        "Focus Mode silences notifications and holds them quietly in your Focus Inbox",
+        "Time-Boxed Mindful Pause before distracting apps (5 / 10 / 15m gentle timer)",
+        "Full customization of themes, fonts, weights, and app display styles"
+    )
+    override val obTour2Tag = "PRAYER & QIBLA"
+    override val obTour2Title = "Every prayer on time.. in peace"
+    override val obTour2Desc = "Everything for your daily prayers, 100% offline and accurate."
+    override val obTour2Points = listOf(
+        "Offline Adhan with 4 authentic Muezzins (Makkah, Madinah, Alafasy, Egypt) & instant Power-button stop",
+        "Auto-Focus at Prayer Times silences your phone during prayer and restores automatically",
+        "Daily 5-Prayer Tracker ✓ + accurate offline Qibla compass"
+    )
+    override val obTour3Tag = "QURAN & DHIKR"
+    override val obTour3Title = "Quran & Adhkar.. one swipe away"
+    override val obTour3Desc = "The Holy Quran, daily Adhkar, and Tasbih woven naturally into your day."
+    override val obTour3Points = listOf(
+        "Complete 604-page offline Mushaf with Amiri calligraphy and comfortable spacing",
+        "Morning & Evening Azkar that adapt automatically to the time of day",
+        "AMOLED Black-Screen Tasbih (plus optional rear fingerprint counter)"
+    )
+    override val obTour4Tag = "DAILY PRODUCTIVITY"
+    override val obTour4Title = "Get meaningful work done.. calmly"
+    override val obTour4Desc = "Built-in focus tools so you stay centered without juggling extra apps."
+    override val obTour4Points = listOf(
+        "Pomodoro deep-focus timer that auto-activates Focus Mode",
+        "Daily recurring habits tracker with streaks",
+        "Quick pinned notes + universal search & instant calculator"
+    )
+    override val toastEnteredDefaults = "Welcome to Sukoon — customize anytime from Settings"
     override val minutesShortFmt: (String) -> String = { m -> "${m}m" }
     override val toastLocationUpdatedFmt: (String) -> String = { loc -> "Location set: $loc" }
     override val toastLocationFailed = "Could not detect location — enable GPS or pick manually"
