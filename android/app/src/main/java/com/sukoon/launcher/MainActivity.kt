@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.provider.Settings
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -67,6 +68,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.sukoon.launcher.data.PAGE_META_MAP
 import com.sukoon.launcher.data.formatDigits
+import com.sukoon.launcher.service.AdhanPlaybackManager
 import com.sukoon.launcher.ui.SukoonViewModel
 import com.sukoon.launcher.ui.screens.*
 import com.sukoon.launcher.ui.theme.LocalAppFont
@@ -313,11 +315,13 @@ class MainActivity : ComponentActivity() {
                 appLanguage = state.appLanguage,
                 animationsEnabled = state.animationsEnabled
             ) {
+                val onboardingPreviewId by viewModel.previewingMuezzinId.collectAsState()
                 CompositionLocalProvider(LocalLayoutDirection provides layoutDir) {
                     if (state.onboardingStatus != "completed") {
                         OnboardingScreen(
                             state = state,
                             isLocating = isLocatingState.value,
+                            previewingMuezzinId = onboardingPreviewId,
                             onSetStep = { viewModel.setOnboardingStep(it) },
                             onSetLanguage = { viewModel.setAppLanguage(it) },
                             onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
@@ -329,6 +333,15 @@ class MainActivity : ComponentActivity() {
                             onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
                             onSetPrayerCity = { viewModel.setPrayerCity(it) },
                             onRequestLocation = { requestUserLocation() },
+                            onToggleAdhan = { toggleAdhanWithPermission(it) },
+                            onSetAdhanMuezzin = { viewModel.setAdhanMuezzin(it) },
+                            onToggleMuezzinPreview = { viewModel.toggleMuezzinPreview(it) },
+                            onTogglePrayerReminder = { togglePrayerReminderWithPermission(it) },
+                            onSetPrayerReminderMinutes = { viewModel.setPrayerReminderMinutes(it) },
+                            onTogglePrayerAutoFocus = { viewModel.setPrayerAutoFocusEnabled(it) },
+                            onSetPrayerAutoFocusMinutes = { viewModel.setPrayerAutoFocusMinutes(it) },
+                            onSetMindfulDuration = { viewModel.setMindfulPauseSeconds(it) },
+                            onToggleMindfulTimeBox = { viewModel.setMindfulTimeBoxEnabled(it) },
                             onComplete = { viewModel.completeOnboarding() }
                         )
                     } else {
@@ -381,6 +394,16 @@ class MainActivity : ComponentActivity() {
         viewModel.flushPendingSave()
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (AdhanPlaybackManager.isPlaying.value &&
+            (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP)
+        ) {
+            AdhanPlaybackManager.stopAdhan(this)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         try {
@@ -414,6 +437,8 @@ private fun SukoonLauncherRoot(
     val mindfulApp by viewModel.mindfulApp.collectAsState()
     val mindfulSecondsLeft by viewModel.mindfulSecondsLeft.collectAsState()
     val prayerAutoFocusUntil by viewModel.prayerAutoFocusUntil.collectAsState()
+    val isAdhanPlaying by viewModel.isAdhanPlaying.collectAsState()
+    val playingAdhanPrayer by viewModel.playingAdhanPrayer.collectAsState()
     val isPrayerAutoFocusActive = prayerAutoFocusUntil > System.currentTimeMillis()
     val animOn = state.animationsEnabled
     val pomoTotal by viewModel.pomoTotalSeconds.collectAsState()
@@ -843,6 +868,50 @@ private fun SukoonLauncherRoot(
                         fontFamily = appFont,
                         fontSize = 11.sp,
                         color = Color(0x1EFFFFFF)
+                    )
+                }
+            }
+        }
+
+        // Active Adhan Floating Stop Banner (tap anywhere or press Power/Volume to silence immediately)
+        AnimatedVisibility(
+            visible = isAdhanPlaying,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            enter = if (animOn) fadeIn(tween(180)) + slideInVertically(tween(220)) { -it } else EnterTransition.None,
+            exit = if (animOn) fadeOut(tween(150)) + slideOutVertically(tween(160)) { -it } else ExitTransition.None
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 540.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.accentWarm)
+                    .clickable { viewModel.stopActiveAdhan() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = strings.stopAdhanBannerFmt(playingAdhanPrayer.ifEmpty { if (strings.isArabic) "الصلاة" else "Prayer" }),
+                    fontFamily = appFont,
+                    fontSize = 12.sp,
+                    color = colors.background,
+                    modifier = Modifier.weight(1f).padding(end = 10.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(colors.background)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = strings.stopAdhanBtn,
+                        fontFamily = appFont,
+                        fontSize = 11.sp,
+                        color = colors.accentWarm
                     )
                 }
             }

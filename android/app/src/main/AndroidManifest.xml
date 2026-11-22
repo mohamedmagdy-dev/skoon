@@ -67,6 +67,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".service.AdhanStopReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".service.PrayerAutoFocusStartReceiver"
             android:exported="false" />
 

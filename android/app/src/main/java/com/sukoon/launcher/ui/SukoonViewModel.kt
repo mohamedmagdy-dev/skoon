@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sukoon.launcher.data.*
+import com.sukoon.launcher.service.AdhanPlaybackManager
 import com.sukoon.launcher.service.AdhanScheduler
 import com.sukoon.launcher.service.CapturedNotification
 import com.sukoon.launcher.service.PrayerAutoFocusScheduler
@@ -76,6 +77,12 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     val mindfulApp: StateFlow<AppInfo?> = _mindfulApp.asStateFlow()
 
     val prayerAutoFocusUntil: StateFlow<Long> = SukoonNotificationService.prayerAutoFocusUntil
+    val isAdhanPlaying: StateFlow<Boolean> = AdhanPlaybackManager.isPlaying
+    val playingAdhanPrayer: StateFlow<String> = AdhanPlaybackManager.playingPrayerName
+
+    fun stopActiveAdhan() {
+        AdhanPlaybackManager.stopAdhan(getApplication())
+    }
 
     private val _mindfulSecondsLeft = MutableStateFlow(5)
     val mindfulSecondsLeft: StateFlow<Int> = _mindfulSecondsLeft.asStateFlow()
@@ -440,14 +447,9 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
-                if (opt.rawResId != null) {
-                    val afd = appCtx.resources.openRawResourceFd(opt.rawResId)
-                    setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                    afd.close()
-                } else {
-                    val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                    setDataSource(appCtx, uri)
-                }
+                val afd = appCtx.resources.openRawResourceFd(opt.rawResId)
+                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
                 setOnCompletionListener { stopMuezzinPreview() }
                 prepare()
                 start()
@@ -492,15 +494,17 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
 
     // ===== Onboarding & Reset =====
     fun setOnboardingStep(step: Int) {
+        stopMuezzinPreview()
         updateState { s ->
             s.copy(
-                onboardingStep = step.coerceIn(0, 7),
+                onboardingStep = step.coerceIn(0, 8),
                 onboardingStatus = if (s.onboardingStatus == "not_started" && step > 0) "in_progress" else s.onboardingStatus
             )
         }
     }
 
     fun completeOnboarding() {
+        stopMuezzinPreview()
         updateState { it.copy(onboardingStatus = "completed", onboardingStep = 0) }
     }
 

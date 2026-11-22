@@ -7,17 +7,23 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.sukoon.launcher.MainActivity
 import com.sukoon.launcher.R
 import com.sukoon.launcher.data.LauncherState
 import com.sukoon.launcher.data.PrayerTimesCalculator
 import com.sukoon.launcher.data.SukoonRepository
 import com.sukoon.launcher.data.formatDigits
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object PrayerReminderScheduler {
     // v2 channel guarantees fresh audible sound & vibration configuration on Android 8+
@@ -169,7 +175,7 @@ data class MuezzinOption(
     val id: String,
     val nameAr: String,
     val nameEn: String,
-    val rawResId: Int?
+    val rawResId: Int
 ) {
     fun localizedName(isArabic: Boolean): String = if (isArabic) nameAr else nameEn
 }
@@ -178,44 +184,118 @@ val MUEZZIN_OPTIONS: List<MuezzinOption> = listOf(
     MuezzinOption("makkah", "أذان مكة المكرمة", "Makkah Adhan", R.raw.adhan_makkah),
     MuezzinOption("madinah", "أذان المدينة المنورة", "Madinah Adhan", R.raw.adhan_madinah),
     MuezzinOption("alafasy", "مشاري العفاسي", "Mishary Alafasy", R.raw.adhan_alafasy),
-    MuezzinOption("egypt", "الأذان المصري", "Egyptian Adhan", R.raw.adhan_egypt),
-    MuezzinOption("chime", "نغمة تنبيه هادئة", "Gentle Chime", null)
+    MuezzinOption("egypt", "الأذان المصري", "Egyptian Adhan", R.raw.adhan_egypt)
 )
 
 fun muezzinOptionFor(id: String): MuezzinOption =
     MUEZZIN_OPTIONS.firstOrNull { it.id == id } ?: MUEZZIN_OPTIONS.first()
 
-object AdhanScheduler {
-    private const val REQUEST_CODE = 7711
-    const val EXTRA_MUEZZIN_ID = "muezzin_id"
+object AdhanPlaybackManager {
+    private const val ADHAN_NOTIF_ID = 7712
 
-    fun channelIdFor(muezzinId: String): String = "sukoon_adhan_${muezzinId}_v1"
+    @Volatile
+    private var player: MediaPlayer? = null
 
-    fun soundUriFor(context: Context, muezzinId: String): Uri {
+    @Volatile
+    private var screenOffReceiver: BroadcastReceiver? = null
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _playingPrayerName = MutableStateFlow("")
+    val playingPrayerName: StateFlow<String> = _playingPrayerName.asStateFlow()
+
+    fun startAdhan(context: Context, muezzinId: String, prayerName: String) {
+        val appCtx = context.applicationContext
+        stopAdhan(appCtx)
         val opt = muezzinOptionFor(muezzinId)
-        return if (opt.rawResId != null) {
-            Uri.parse("android.resource://${context.packageName}/${opt.rawResId}")
-        } else {
-            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        try {
+            val mp = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                val afd = appCtx.resources.openRawResourceFd(opt.rawResId)
+                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
+                setOnCompletionListener { stopAdhan(appCtx) }
+                setOnErrorListener { _, _, _ ->
+                    stopAdhan(appCtx)
+                    true
+                }
+                prepare()
+                start()
+            }
+            player = mp
+            _playingPrayerName.value = prayerName
+            _isPlaying.value = true
+
+            // Pressing the Power button (ACTION_SCREEN_OFF) stops the Adhan immediately
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context?, intent: Intent?) {
+                    if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                        stopAdhan(appCtx)
+                    }
+                }
+            }
+            screenOffReceiver = receiver
+            ContextCompat.registerReceiver(
+                appCtx,
+                receiver,
+                IntentFilter(Intent.ACTION_SCREEN_OFF),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        } catch (_: Exception) {
+            stopAdhan(appCtx)
         }
     }
 
-    fun ensureChannel(context: Context, muezzinId: String) {
+    fun stopAdhan(context: Context) {
+        val appCtx = context.applicationContext
+        try {
+            player?.stop()
+            player?.release()
+        } catch (_: Exception) {
+        }
+        player = null
+
+        screenOffReceiver?.let { r ->
+            try {
+                appCtx.unregisterReceiver(r)
+            } catch (_: Exception) {
+            }
+        }
+        screenOffReceiver = null
+
+        _isPlaying.value = false
+        _playingPrayerName.value = ""
+
+        try {
+            val nm = appCtx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.cancel(ADHAN_NOTIF_ID)
+        } catch (_: Exception) {
+        }
+    }
+}
+
+object AdhanScheduler {
+    private const val REQUEST_CODE = 7711
+    const val CHANNEL_ID = "sukoon_adhan_alert_v2"
+    const val EXTRA_MUEZZIN_ID = "muezzin_id"
+
+    fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            val opt = muezzinOptionFor(muezzinId)
-            val soundUri = soundUriFor(context, muezzinId)
-            val audioAttrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
             val channel = NotificationChannel(
-                channelIdFor(muezzinId),
-                "الأذان • ${opt.nameAr}",
+                CHANNEL_ID,
+                "الأذان • Adhan",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Adhan alert at exact prayer time"
-                setSound(soundUri, audioAttrs)
+                // Audio is played directly by AdhanPlaybackManager so Power button & Stop button silence it instantly
+                setSound(null, null)
                 enableVibration(true)
             }
             nm.createNotificationChannel(channel)
@@ -240,7 +320,7 @@ object AdhanScheduler {
             return
         }
         val muezzinId = muezzinOptionFor(state.adhanMuezzinId).id
-        ensureChannel(context, muezzinId)
+        ensureChannel(context)
 
         val now = System.currentTimeMillis()
         val info = PrayerTimesCalculator.getNextPrayerForState(state, now)
@@ -268,6 +348,12 @@ object AdhanScheduler {
     }
 }
 
+class AdhanStopReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        AdhanPlaybackManager.stopAdhan(context)
+    }
+}
+
 class AdhanReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val lang = intent?.getStringExtra(PrayerReminderScheduler.EXTRA_LANG) ?: "ar"
@@ -276,11 +362,12 @@ class AdhanReceiver : BroadcastReceiver() {
         val prayerEn = intent?.getStringExtra(PrayerReminderScheduler.EXTRA_PRAYER_NAME_EN) ?: "Prayer"
         val muezzinId = intent?.getStringExtra(AdhanScheduler.EXTRA_MUEZZIN_ID) ?: "makkah"
 
-        AdhanScheduler.ensureChannel(context, muezzinId)
-        val soundUri = AdhanScheduler.soundUriFor(context, muezzinId)
+        AdhanScheduler.ensureChannel(context)
+        AdhanPlaybackManager.startAdhan(context, muezzinId, if (isAr) prayerAr else prayerEn)
 
         val title = if (isAr) "حان الآن موعد أذان $prayerAr" else "It is time for $prayerEn"
-        val body = if (isAr) "حيّ على الصلاة — حيّ على الفلاح" else "Hayya 'alas-Salah — Come to prayer"
+        val body = if (isAr) "حيّ على الصلاة — اضغط لإيقاف الأذان أو اضغط زر الباور" else "Come to prayer — tap Stop or press Power to silence"
+        val stopLabel = if (isAr) "■ إيقاف الأذان" else "■ Stop Adhan"
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -292,15 +379,25 @@ class AdhanReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notif = NotificationCompat.Builder(context, AdhanScheduler.channelIdFor(muezzinId))
+        val stopIntent = Intent(context, AdhanStopReceiver::class.java)
+        val stopPi = PendingIntent.getBroadcast(
+            context,
+            7713,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notif = NotificationCompat.Builder(context, AdhanScheduler.CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setSound(soundUri)
+            .setSilent(true)
             .setAutoCancel(true)
             .setContentIntent(openPi)
+            .setDeleteIntent(stopPi)
+            .addAction(0, stopLabel, stopPi)
             .build()
 
         try {

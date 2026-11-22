@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +29,9 @@ import com.sukoon.launcher.data.LauncherState
 import com.sukoon.launcher.data.PAGE_META_MAP
 import com.sukoon.launcher.data.PRAYER_CITIES
 import com.sukoon.launcher.data.PrayerTimesCalculator
+import com.sukoon.launcher.data.formatDigits
+import com.sukoon.launcher.service.MUEZZIN_OPTIONS
+import com.sukoon.launcher.service.muezzinOptionFor
 import com.sukoon.launcher.ui.theme.*
 import kotlinx.coroutines.delay
 
@@ -34,6 +39,7 @@ import kotlinx.coroutines.delay
 fun OnboardingScreen(
     state: LauncherState,
     isLocating: Boolean,
+    previewingMuezzinId: String?,
     onSetStep: (Int) -> Unit,
     onSetLanguage: (String) -> Unit,
     onTogglePageEnabled: (String) -> Unit,
@@ -45,6 +51,15 @@ fun OnboardingScreen(
     onSetAppDisplayStyle: (String) -> Unit,
     onSetPrayerCity: (String) -> Unit,
     onRequestLocation: () -> Unit,
+    onToggleAdhan: (Boolean) -> Unit,
+    onSetAdhanMuezzin: (String) -> Unit,
+    onToggleMuezzinPreview: (String) -> Unit,
+    onTogglePrayerReminder: (Boolean) -> Unit,
+    onSetPrayerReminderMinutes: (Int) -> Unit,
+    onTogglePrayerAutoFocus: (Boolean) -> Unit,
+    onSetPrayerAutoFocusMinutes: (Int) -> Unit,
+    onSetMindfulDuration: (Int) -> Unit,
+    onToggleMindfulTimeBox: (Boolean) -> Unit,
     onComplete: () -> Unit
 ) {
     val colors = LocalSukoonColors.current
@@ -154,7 +169,7 @@ fun OnboardingScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    for (i in 1..7) {
+                    for (i in 1..8) {
                         val active = i == step
                         val passed = i < step
                         Box(
@@ -173,7 +188,7 @@ fun OnboardingScreen(
                     }
                 }
 
-                if (step == 5) {
+                if (step == 5 || step == 6) {
                     Text(
                         text = strings.skipLabel,
                         fontFamily = appFont,
@@ -181,7 +196,7 @@ fun OnboardingScreen(
                         color = colors.textSecondary,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onSetStep(6) }
+                            .clickable { onSetStep(step + 1) }
                             .padding(vertical = 8.dp, horizontal = 4.dp)
                     )
                 } else {
@@ -596,8 +611,190 @@ fun OnboardingScreen(
                         }
                     }
 
-                    // Screen 07 — Customize Navigation
+                    // Screen 07 — Adhan Voice, Prayer Reminders & Essential Timings
                     6 -> Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(strings.obPrayerSetupTitle, fontFamily = appFont, fontSize = 24.sp, fontWeight = FontWeight.Light, color = colors.textPrimary)
+                            Text(strings.obPrayerSetupSub, fontFamily = appFont, fontSize = 13.sp, color = colors.textSecondary)
+                        }
+
+                        // Card 1: Adhan & Muezzin Voice
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.surface)
+                                .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(strings.adhanTitle, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                                    Text(strings.adhanSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                                Switch(
+                                    checked = state.adhanEnabled,
+                                    onCheckedChange = onToggleAdhan,
+                                    colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                                )
+                            }
+
+                            Text(strings.muezzinVoiceLabel, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
+                            MUEZZIN_OPTIONS.forEach { mOpt ->
+                                val selected = state.adhanMuezzinId == mOpt.id
+                                val playing = previewingMuezzinId == mOpt.id
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (selected) colors.accentWarmSoft else colors.background)
+                                        .border(
+                                            1.dp,
+                                            if (selected) colors.accentWarm else colors.borderSubtle,
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable { onSetAdhanMuezzin(mOpt.id) }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = mOpt.localizedName(strings.isArabic) + if (selected) " ✓" else "",
+                                        fontFamily = appFont,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                                        color = if (selected) colors.accentWarm else colors.textPrimary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    SmallChip(
+                                        label = if (playing) strings.stopAudio else strings.previewAudio,
+                                        active = playing
+                                    ) { onToggleMuezzinPreview(mOpt.id) }
+                                }
+                            }
+                        }
+
+                        // Card 2: Pre-Prayer Reminder + Auto-Focus at Prayer Times
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.surface)
+                                .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(strings.prayerReminderTitle, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                                    Text(strings.prayerReminderSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                                Switch(
+                                    checked = state.prayerReminderEnabled,
+                                    onCheckedChange = onTogglePrayerReminder,
+                                    colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                                )
+                            }
+                            if (state.prayerReminderEnabled) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf(5, 10, 15, 20, 30).forEach { mins ->
+                                        SmallChip(
+                                            label = strings.minutesShortFmt(mins.formatDigits(strings.isArabic)),
+                                            active = state.prayerReminderMinutesBefore == mins,
+                                            modifier = Modifier.weight(1f)
+                                        ) { onSetPrayerReminderMinutes(mins) }
+                                    }
+                                }
+                            }
+
+                            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(strings.prayerAutoFocusTitle, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                                    Text(strings.prayerAutoFocusSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                                Switch(
+                                    checked = state.prayerAutoFocusEnabled,
+                                    onCheckedChange = onTogglePrayerAutoFocus,
+                                    colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                                )
+                            }
+                            if (state.prayerAutoFocusEnabled) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf(15, 20, 30).forEach { mins ->
+                                        SmallChip(
+                                            label = strings.minutesShortFmt(mins.formatDigits(strings.isArabic)),
+                                            active = state.prayerAutoFocusMinutes == mins,
+                                            modifier = Modifier.weight(1f)
+                                        ) { onSetPrayerAutoFocusMinutes(mins) }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Card 3: Mindful Pause Duration & Time-Box
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.surface)
+                                .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(strings.mindfulDurationLabel, fontFamily = appFont, fontSize = 13.sp, color = colors.textPrimary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf(3, 5, 10).forEach { sec ->
+                                        SmallChip("${sec.formatDigits(strings.isArabic)}s", active = state.mindfulPauseSeconds == sec) {
+                                            onSetMindfulDuration(sec)
+                                        }
+                                    }
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(strings.mindfulTimeBoxTitle, fontFamily = appFont, fontSize = 13.sp, color = colors.textPrimary)
+                                    Text(strings.mindfulTimeBoxSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                                Switch(
+                                    checked = state.mindfulTimeBoxEnabled,
+                                    onCheckedChange = onToggleMindfulTimeBox,
+                                    colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                                )
+                            }
+                        }
+                    }
+
+                    // Screen 08 — Customize Navigation
+                    7 -> Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
@@ -696,6 +893,10 @@ fun OnboardingScreen(
                                 Text(strings.prayerCitySection, fontFamily = appFont, fontSize = 13.sp, color = colors.textSecondary)
                                 Text(selectedCity.localizedName(strings.isArabic), fontFamily = appFont, fontSize = 13.sp, color = colors.textPrimary)
                             }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(strings.muezzinVoiceLabel, fontFamily = appFont, fontSize = 13.sp, color = colors.textSecondary)
+                                Text(muezzinOptionFor(state.adhanMuezzinId).localizedName(strings.isArabic), fontFamily = appFont, fontSize = 13.sp, color = colors.accentWarm)
+                            }
                         }
                     }
                 }
@@ -708,7 +909,7 @@ fun OnboardingScreen(
                     .clip(RoundedCornerShape(14.dp))
                     .background(colors.textPrimary)
                     .clickable {
-                        if (step < 7) onSetStep(step + 1) else onComplete()
+                        if (step < 8) onSetStep(step + 1) else onComplete()
                     }
                     .padding(vertical = 15.dp),
                 contentAlignment = Alignment.Center
@@ -716,7 +917,7 @@ fun OnboardingScreen(
                 Text(
                     text = when (step) {
                         1 -> strings.obGetStarted
-                        7 -> strings.obEnterSukoon
+                        8 -> strings.obEnterSukoon
                         else -> strings.nextLabel
                     },
                     fontFamily = appFont,

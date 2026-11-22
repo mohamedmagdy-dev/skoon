@@ -233,6 +233,10 @@ interface AppStrings {
     val toastTimeBoxScheduledFmt: (String, String) -> String
     val animationsTitle: String
     val animationsSub: String
+    val stopAdhanBannerFmt: (String) -> String
+    val stopAdhanBtn: String
+    val obPrayerSetupTitle: String
+    val obPrayerSetupSub: String
     val minutesShortFmt: (String) -> String
     val toastLocationUpdatedFmt: (String) -> String
     val toastLocationFailed: String
@@ -525,6 +529,10 @@ object ArabicStrings : AppStrings {
     override val toastTimeBoxScheduledFmt: (String, String) -> String = { m, app -> "سيتم تذكيرك بهدوء بعد $m دقائق في $app" }
     override val animationsTitle = "السلاسة والرسوم المتحركة"
     override val animationsSub = "حركات انتقال وفتح هادئة — أطفئها لتجربة فورية تماماً بدون حركة"
+    override val stopAdhanBannerFmt: (String) -> String = { p -> "🔊 أذان $p يصدح الآن — اضغط أو اضغط زر الباور للإيقاف" }
+    override val stopAdhanBtn = "■ إيقاف الأذان"
+    override val obPrayerSetupTitle = "الأذان والسكينة والتوقيت"
+    override val obPrayerSetupSub = "اختر صوت المؤذن واضبط التنبيهات والدقائق الأساسية مرة واحدة قبل الدخول"
     override val minutesShortFmt: (String) -> String = { m -> "$m د" }
     override val toastLocationUpdatedFmt: (String) -> String = { loc -> "تم تحديد موقعك: $loc" }
     override val toastLocationFailed = "تعذر تحديد الموقع — تأكد من تفعيل GPS أو اختر مدينتك يدوياً"
@@ -816,6 +824,10 @@ object EnglishStrings : AppStrings {
     override val toastTimeBoxScheduledFmt: (String, String) -> String = { m, app -> "Gentle reminder set for ${m}m in $app" }
     override val animationsTitle = "Smooth Animations & Motion"
     override val animationsSub = "Gentle transitions & motion — turn off for instant zero-motion mode"
+    override val stopAdhanBannerFmt: (String) -> String = { p -> "🔊 $p Adhan playing — tap or press Power to stop" }
+    override val stopAdhanBtn = "■ Stop Adhan"
+    override val obPrayerSetupTitle = "Adhan, Calm & Timings"
+    override val obPrayerSetupSub = "Choose your Muezzin voice and essential durations once before entering"
     override val minutesShortFmt: (String) -> String = { m -> "${m}m" }
     override val toastLocationUpdatedFmt: (String) -> String = { loc -> "Location set: $loc" }
     override val toastLocationFailed = "Could not detect location — enable GPS or pick manually"
