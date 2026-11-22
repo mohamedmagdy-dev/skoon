@@ -62,5 +62,9 @@
             android:name=".service.PrayerReminderReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".service.AdhanReceiver"
+            android:exported="false" />
+
     </application>
 </manifest>

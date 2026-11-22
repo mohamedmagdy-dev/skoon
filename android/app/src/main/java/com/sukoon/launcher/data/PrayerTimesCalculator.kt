@@ -348,4 +348,36 @@ object PrayerTimesCalculator {
     private fun darccot(x: Double) = Math.toDegrees(atan(1.0 / x))
     private fun fixAngle(a: Double): Double = a - 360.0 * floor(a / 360.0)
     private fun fixHour(h: Double): Double = h - 24.0 * floor(h / 24.0)
+
+    // Kaaba coordinates (Makkah al-Mukarramah)
+    private const val KAABA_LAT = 21.422487
+    private const val KAABA_LNG = 39.826206
+
+    /**
+     * Exact spherical trigonometry bearing to Kaaba in degrees (0..360 clockwise from True North).
+     */
+    fun calculateQiblaBearing(lat: Double, lng: Double): Double {
+        val phiK = Math.toRadians(KAABA_LAT)
+        val lambdaK = Math.toRadians(KAABA_LNG)
+        val phi = Math.toRadians(lat)
+        val lambda = Math.toRadians(lng)
+        val dLambda = lambdaK - lambda
+        val y = sin(dLambda)
+        val x = cos(phi) * tan(phiK) - sin(phi) * cos(dLambda)
+        val deg = Math.toDegrees(atan2(y, x))
+        return (deg + 360.0) % 360.0
+    }
+
+    /**
+     * Haversine great-circle distance to Kaaba in kilometers.
+     */
+    fun calculateDistanceToKaabaKm(lat: Double, lng: Double): Int {
+        val r = 6371.0
+        val dLat = Math.toRadians(KAABA_LAT - lat)
+        val dLng = Math.toRadians(KAABA_LNG - lng)
+        val a = sin(dLat / 2).pow(2) +
+            cos(Math.toRadians(lat)) * cos(Math.toRadians(KAABA_LAT)) * sin(dLng / 2).pow(2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return (r * c).roundToInt()
+    }
 }

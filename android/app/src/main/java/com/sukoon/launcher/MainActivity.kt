@@ -82,14 +82,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var pendingNotifAction: String? = null // "reminder" | "adhan"
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            viewModel.setPrayerReminderEnabled(true)
+            if (pendingNotifAction == "adhan") viewModel.setAdhanEnabled(true)
+            else viewModel.setPrayerReminderEnabled(true)
         } else {
             viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastNotifPermissionDenied)
         }
+        pendingNotifAction = null
     }
 
     private fun requestUserLocation() {
@@ -116,11 +120,28 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             if (!granted) {
+                pendingNotifAction = "reminder"
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 return
             }
         }
         viewModel.setPrayerReminderEnabled(true)
+    }
+
+    private fun toggleAdhanWithPermission(enable: Boolean) {
+        if (!enable) {
+            viewModel.setAdhanEnabled(false)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                pendingNotifAction = "adhan"
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        viewModel.setAdhanEnabled(true)
     }
 
     @SuppressLint("MissingPermission")
@@ -301,6 +322,7 @@ class MainActivity : ComponentActivity() {
                             isLocating = isLocatingState.value,
                             onRequestLocation = { requestUserLocation() },
                             onTogglePrayerReminder = { togglePrayerReminderWithPermission(it) },
+                            onToggleAdhan = { toggleAdhanWithPermission(it) },
                             onSetBlackScreenWindow = { enabled -> setBlackScreenMode(enabled) },
                             onOpenNotificationAccess = {
                                 try {
@@ -340,6 +362,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        viewModel.stopMuezzinPreview()
         viewModel.flushPendingSave()
     }
 
@@ -359,6 +382,7 @@ private fun SukoonLauncherRoot(
     isLocating: Boolean,
     onRequestLocation: () -> Unit,
     onTogglePrayerReminder: (Boolean) -> Unit,
+    onToggleAdhan: (Boolean) -> Unit,
     onSetBlackScreenWindow: (Boolean) -> Unit,
     onOpenNotificationAccess: () -> Unit,
     onOpenAccessibility: () -> Unit,
@@ -381,11 +405,13 @@ private fun SukoonLauncherRoot(
     val isAccConnected by viewModel.isAccessibilityConnected.collectAsState()
     val capturedNotifications by viewModel.capturedNotifications.collectAsState()
     val isNotifAccessGranted by viewModel.isNotificationAccessGranted.collectAsState()
+    val previewingMuezzinId by viewModel.previewingMuezzinId.collectAsState()
     val pageLayoutDir = if (strings.isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     var showDrawer by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showQibla by remember { mutableStateOf(false) }
     var blackScreenMode by remember { mutableStateOf<String?>(null) } // null | "dhikr" | "azkar"
     var azkarIsMorning by remember { mutableStateOf(isCurrentlyMorning()) }
 
@@ -412,7 +438,11 @@ private fun SukoonLauncherRoot(
         when {
             blackScreenMode != null -> blackScreenMode = null
             mindfulApp != null -> viewModel.dismissMindfulPause()
-            showSettings -> showSettings = false
+            showQibla -> showQibla = false
+            showSettings -> {
+                viewModel.stopMuezzinPreview()
+                showSettings = false
+            }
             showDrawer -> showDrawer = false
             showSearch -> showSearch = false
             pagerState.currentPage != homeIdx -> scope.launch { pagerState.animateScrollToPage(homeIdx) }
@@ -474,6 +504,7 @@ private fun SukoonLauncherRoot(
                                         onOpenDrawer = { showDrawer = true },
                                         onOpenSearch = { showSearch = true },
                                         onOpenSettings = { showSettings = true },
+                                        onOpenQibla = { showQibla = true },
                                         onNavigateRight = {
                                             if (homeIdx + 1 < visiblePageIds.size) {
                                                 scope.launch { pagerState.animateScrollToPage(homeIdx + 1) }
@@ -631,6 +662,7 @@ private fun SukoonLauncherRoot(
                 isAccessibilityConnected = isAccConnected,
                 isNotificationAccessGranted = isNotifAccessGranted,
                 isLocating = isLocating,
+                previewingMuezzinId = previewingMuezzinId,
                 onSetLanguage = { viewModel.setAppLanguage(it) },
                 onSetAppFont = { viewModel.setAppFont(it) },
                 onSetAppFontWeight = { viewModel.setAppFontWeight(it) },
@@ -640,6 +672,10 @@ private fun SukoonLauncherRoot(
                 onRequestLocation = onRequestLocation,
                 onTogglePrayerReminder = onTogglePrayerReminder,
                 onSetPrayerReminderMinutes = { viewModel.setPrayerReminderMinutes(it) },
+                onToggleAdhan = onToggleAdhan,
+                onSetAdhanMuezzin = { viewModel.setAdhanMuezzin(it) },
+                onToggleMuezzinPreview = { viewModel.toggleMuezzinPreview(it) },
+                onOpenQibla = { showQibla = true },
                 onSetQuranLineHeight = { viewModel.setQuranLineHeight(it) },
                 onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
                 onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
@@ -655,7 +691,18 @@ private fun SukoonLauncherRoot(
                 onOpenDefaultLauncherSettings = onOpenDefaultHome,
                 onRestartSetup = { viewModel.restartSetup() },
                 onResetApp = { viewModel.resetApp() },
-                onClose = { showSettings = false }
+                onClose = {
+                    viewModel.stopMuezzinPreview()
+                    showSettings = false
+                }
+            )
+        }
+
+        if (showQibla) {
+            QiblaOverlay(
+                state = state,
+                onAlignedHaptic = { viewModel.vibrateLight() },
+                onClose = { showQibla = false }
             )
         }
 

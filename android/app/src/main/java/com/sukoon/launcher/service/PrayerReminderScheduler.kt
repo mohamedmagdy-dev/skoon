@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.sukoon.launcher.MainActivity
@@ -158,6 +159,161 @@ class PrayerReminderReceiver : BroadcastReceiver() {
             val state = repo.loadState()
             if (state.prayerReminderEnabled) {
                 PrayerReminderScheduler.scheduleNext(context, state)
+            }
+        } catch (_: Exception) {
+        }
+    }
+}
+
+data class MuezzinOption(
+    val id: String,
+    val nameAr: String,
+    val nameEn: String,
+    val rawResId: Int?
+) {
+    fun localizedName(isArabic: Boolean): String = if (isArabic) nameAr else nameEn
+}
+
+val MUEZZIN_OPTIONS: List<MuezzinOption> = listOf(
+    MuezzinOption("makkah", "أذان مكة المكرمة", "Makkah Adhan", R.raw.adhan_makkah),
+    MuezzinOption("madinah", "أذان المدينة المنورة", "Madinah Adhan", R.raw.adhan_madinah),
+    MuezzinOption("alafasy", "مشاري العفاسي", "Mishary Alafasy", R.raw.adhan_alafasy),
+    MuezzinOption("egypt", "الأذان المصري", "Egyptian Adhan", R.raw.adhan_egypt),
+    MuezzinOption("chime", "نغمة تنبيه هادئة", "Gentle Chime", null)
+)
+
+fun muezzinOptionFor(id: String): MuezzinOption =
+    MUEZZIN_OPTIONS.firstOrNull { it.id == id } ?: MUEZZIN_OPTIONS.first()
+
+object AdhanScheduler {
+    private const val REQUEST_CODE = 7711
+    const val EXTRA_MUEZZIN_ID = "muezzin_id"
+
+    fun channelIdFor(muezzinId: String): String = "sukoon_adhan_${muezzinId}_v1"
+
+    fun soundUriFor(context: Context, muezzinId: String): Uri {
+        val opt = muezzinOptionFor(muezzinId)
+        return if (opt.rawResId != null) {
+            Uri.parse("android.resource://${context.packageName}/${opt.rawResId}")
+        } else {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        }
+    }
+
+    fun ensureChannel(context: Context, muezzinId: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            val opt = muezzinOptionFor(muezzinId)
+            val soundUri = soundUriFor(context, muezzinId)
+            val audioAttrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            val channel = NotificationChannel(
+                channelIdFor(muezzinId),
+                "الأذان • ${opt.nameAr}",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Adhan alert at exact prayer time"
+                setSound(soundUri, audioAttrs)
+                enableVibration(true)
+            }
+            nm.createNotificationChannel(channel)
+        }
+    }
+
+    fun cancel(context: Context) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val intent = Intent(context, AdhanReceiver::class.java)
+        val pi = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        am.cancel(pi)
+    }
+
+    fun scheduleNext(context: Context, state: LauncherState) {
+        if (!state.adhanEnabled) {
+            cancel(context)
+            return
+        }
+        val muezzinId = muezzinOptionFor(state.adhanMuezzinId).id
+        ensureChannel(context, muezzinId)
+
+        val now = System.currentTimeMillis()
+        val info = PrayerTimesCalculator.getNextPrayerForState(state, now)
+        val triggerAt = now + info.remainingMinutes.coerceAtLeast(1) * 60_000L
+
+        val intent = Intent(context, AdhanReceiver::class.java).apply {
+            putExtra(PrayerReminderScheduler.EXTRA_PRAYER_NAME_AR, info.nextPrayer.nameAr)
+            putExtra(PrayerReminderScheduler.EXTRA_PRAYER_NAME_EN, info.nextPrayer.nameEn)
+            putExtra(PrayerReminderScheduler.EXTRA_LANG, state.appLanguage)
+            putExtra(EXTRA_MUEZZIN_ID, muezzinId)
+        }
+
+        val pi = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        try {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        } catch (_: Exception) {
+        }
+    }
+}
+
+class AdhanReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        val lang = intent?.getStringExtra(PrayerReminderScheduler.EXTRA_LANG) ?: "ar"
+        val isAr = lang != "en"
+        val prayerAr = intent?.getStringExtra(PrayerReminderScheduler.EXTRA_PRAYER_NAME_AR) ?: "الصلاة"
+        val prayerEn = intent?.getStringExtra(PrayerReminderScheduler.EXTRA_PRAYER_NAME_EN) ?: "Prayer"
+        val muezzinId = intent?.getStringExtra(AdhanScheduler.EXTRA_MUEZZIN_ID) ?: "makkah"
+
+        AdhanScheduler.ensureChannel(context, muezzinId)
+        val soundUri = AdhanScheduler.soundUriFor(context, muezzinId)
+
+        val title = if (isAr) "حان الآن موعد أذان $prayerAr" else "It is time for $prayerEn"
+        val body = if (isAr) "حيّ على الصلاة — حيّ على الفلاح" else "Hayya 'alas-Salah — Come to prayer"
+
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPi = PendingIntent.getActivity(
+            context,
+            1,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notif = NotificationCompat.Builder(context, AdhanScheduler.channelIdFor(muezzinId))
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSound(soundUri)
+            .setAutoCancel(true)
+            .setContentIntent(openPi)
+            .build()
+
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.notify(7712, notif)
+        } catch (_: SecurityException) {
+        }
+
+        try {
+            val repo = SukoonRepository(context)
+            val state = repo.loadState()
+            if (state.adhanEnabled) {
+                AdhanScheduler.scheduleNext(context, state)
             }
         } catch (_: Exception) {
         }

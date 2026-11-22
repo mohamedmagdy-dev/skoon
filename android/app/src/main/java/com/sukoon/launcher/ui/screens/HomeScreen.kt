@@ -46,6 +46,7 @@ fun HomeScreen(
     onOpenDrawer: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenQibla: () -> Unit,
     onNavigateRight: () -> Unit,
     onNavigateLeft: () -> Unit
 ) {
@@ -221,16 +222,29 @@ fun HomeScreen(
                             fontSize = 11.sp,
                             color = colors.textSecondary
                         )
-                        Text(
-                            text = strings.changeCityHint,
-                            fontFamily = appFont,
-                            fontSize = 11.sp,
-                            color = colors.accentWarm,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { onOpenSettings() }
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = strings.qiblaTitle,
+                                fontFamily = appFont,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.accentWarm,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onOpenQibla() }
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                            Text(
+                                text = strings.changeCityHint,
+                                fontFamily = appFont,
+                                fontSize = 11.sp,
+                                color = colors.textSecondary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onOpenSettings() }
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),

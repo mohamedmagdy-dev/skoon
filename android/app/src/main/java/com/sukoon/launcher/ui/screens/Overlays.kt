@@ -38,6 +38,8 @@ import com.sukoon.launcher.data.PAGE_META_MAP
 import com.sukoon.launcher.data.PRAYER_CITIES
 import com.sukoon.launcher.data.PrayerTimesCalculator
 import com.sukoon.launcher.data.formatDigits
+import com.sukoon.launcher.service.MUEZZIN_OPTIONS
+import com.sukoon.launcher.service.muezzinOptionFor
 import com.sukoon.launcher.ui.VolumeLevels
 import com.sukoon.launcher.ui.theme.APP_FONT_OPTIONS
 import com.sukoon.launcher.ui.theme.APP_THEME_OPTIONS
@@ -424,6 +426,7 @@ fun SettingsOverlay(
     isAccessibilityConnected: Boolean,
     isNotificationAccessGranted: Boolean,
     isLocating: Boolean,
+    previewingMuezzinId: String?,
     onSetLanguage: (String) -> Unit,
     onSetAppFont: (String) -> Unit,
     onSetAppFontWeight: (String) -> Unit,
@@ -433,6 +436,10 @@ fun SettingsOverlay(
     onRequestLocation: () -> Unit,
     onTogglePrayerReminder: (Boolean) -> Unit,
     onSetPrayerReminderMinutes: (Int) -> Unit,
+    onToggleAdhan: (Boolean) -> Unit,
+    onSetAdhanMuezzin: (String) -> Unit,
+    onToggleMuezzinPreview: (String) -> Unit,
+    onOpenQibla: () -> Unit,
     onSetQuranLineHeight: (Float) -> Unit,
     onMovePage: (Int, Int) -> Unit,
     onTogglePageEnabled: (String) -> Unit,
@@ -846,6 +853,93 @@ fun SettingsOverlay(
                                             Text(city.localizedName(strings.isArabic), fontFamily = appFont, fontSize = 13.sp, color = if (isSel) colors.accentWarm else colors.textPrimary)
                                             Text(city.localizedCountry(strings.isArabic) + if (isSel) " ✓" else "", fontFamily = appFont, fontSize = 11.sp, color = if (isSel) colors.accentWarm else colors.textMuted)
                                         }
+                                    }
+                                }
+                            }
+                        }
+
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Qibla Compass Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onClose()
+                                    onOpenQibla()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.qiblaTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(strings.qiblaSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                            }
+                            Text(strings.openChevron, fontFamily = appFont, fontSize = 12.sp, color = colors.accentWarm)
+                        }
+
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Adhan Toggle + Muezzin Voice Picker with Live Preview
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(strings.adhanTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                    Text(strings.adhanSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                                Switch(
+                                    checked = state.adhanEnabled,
+                                    onCheckedChange = onToggleAdhan,
+                                    colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                                )
+                            }
+
+                            Text(
+                                text = "${strings.muezzinVoiceLabel}: ${muezzinOptionFor(state.adhanMuezzinId).localizedName(strings.isArabic)}",
+                                fontFamily = appFont,
+                                fontSize = 11.sp,
+                                color = colors.textMuted
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                MUEZZIN_OPTIONS.forEach { mOpt ->
+                                    val selected = state.adhanMuezzinId == mOpt.id
+                                    val playing = previewingMuezzinId == mOpt.id
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (selected) colors.accentWarmSoft else colors.background)
+                                            .border(
+                                                1.dp,
+                                                if (selected) colors.accentWarm else colors.borderSubtle,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable { onSetAdhanMuezzin(mOpt.id) }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = mOpt.localizedName(strings.isArabic) + if (selected) " ✓" else "",
+                                            fontFamily = appFont,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                                            color = if (selected) colors.accentWarm else colors.textPrimary,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        SmallChip(
+                                            label = if (playing) strings.stopAudio else strings.previewAudio,
+                                            active = playing
+                                        ) { onToggleMuezzinPreview(mOpt.id) }
                                     }
                                 }
                             }

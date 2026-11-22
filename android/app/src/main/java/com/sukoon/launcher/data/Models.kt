@@ -51,6 +51,8 @@ data class LauncherState(
     val customLocationLabel: String = "",
     val prayerReminderEnabled: Boolean = false,
     val prayerReminderMinutesBefore: Int = 10,
+    val adhanEnabled: Boolean = false,
+    val adhanMuezzinId: String = "makkah", // "makkah" | "madinah" | "alafasy" | "egypt" | "chime"
     val focusMode: Boolean = false,
     val mindfulPauseSeconds: Int = 5,
     val hapticsEnabled: Boolean = true,

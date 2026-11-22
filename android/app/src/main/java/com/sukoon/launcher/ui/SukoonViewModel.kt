@@ -2,7 +2,10 @@ package com.sukoon.launcher.ui
 
 import android.app.Application
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -11,10 +14,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sukoon.launcher.data.*
+import com.sukoon.launcher.service.AdhanScheduler
 import com.sukoon.launcher.service.CapturedNotification
 import com.sukoon.launcher.service.PrayerReminderScheduler
 import com.sukoon.launcher.service.SukoonAccessibilityService
 import com.sukoon.launcher.service.SukoonNotificationService
+import com.sukoon.launcher.service.muezzinOptionFor
 import com.sukoon.launcher.ui.theme.fontOptionFor
 import com.sukoon.launcher.ui.theme.stringsFor
 import com.sukoon.launcher.ui.theme.themeOptionFor
@@ -100,6 +105,11 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     private val _isNotificationAccessGranted = MutableStateFlow(SukoonNotificationService.isPermissionGranted(app))
     val isNotificationAccessGranted: StateFlow<Boolean> = _isNotificationAccessGranted.asStateFlow()
 
+    // Adhan live audio preview state
+    private val _previewingMuezzinId = MutableStateFlow<String?>(null)
+    val previewingMuezzinId: StateFlow<String?> = _previewingMuezzinId.asStateFlow()
+    private var previewPlayer: MediaPlayer? = null
+
     private var toastJob: Job? = null
 
     init {
@@ -140,6 +150,7 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
+        stopMuezzinPreview()
         flushPendingSave()
     }
 
@@ -329,6 +340,72 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
         if (cur.prayerReminderEnabled) {
             PrayerReminderScheduler.scheduleNext(getApplication(), cur)
         }
+        if (cur.adhanEnabled) {
+            AdhanScheduler.scheduleNext(getApplication(), cur)
+        }
+    }
+
+    fun setAdhanEnabled(enabled: Boolean) {
+        updateState { it.copy(adhanEnabled = enabled) }
+        val cur = _state.value
+        AdhanScheduler.scheduleNext(getApplication(), cur)
+        val mName = muezzinOptionFor(cur.adhanMuezzinId).localizedName(strings.isArabic)
+        showToast(if (enabled) strings.toastAdhanOnFmt(mName) else strings.toastAdhanOff)
+    }
+
+    fun setAdhanMuezzin(muezzinId: String) {
+        val opt = muezzinOptionFor(muezzinId)
+        updateState { it.copy(adhanMuezzinId = opt.id) }
+        val cur = _state.value
+        if (cur.adhanEnabled) {
+            AdhanScheduler.scheduleNext(getApplication(), cur)
+        }
+        showToast(strings.toastAdhanOnFmt(opt.localizedName(strings.isArabic)))
+    }
+
+    fun toggleMuezzinPreview(muezzinId: String) {
+        if (_previewingMuezzinId.value == muezzinId) {
+            stopMuezzinPreview()
+            return
+        }
+        stopMuezzinPreview()
+        val opt = muezzinOptionFor(muezzinId)
+        val appCtx = getApplication<Application>()
+        try {
+            val mp = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                if (opt.rawResId != null) {
+                    val afd = appCtx.resources.openRawResourceFd(opt.rawResId)
+                    setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
+                } else {
+                    val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                    setDataSource(appCtx, uri)
+                }
+                setOnCompletionListener { stopMuezzinPreview() }
+                prepare()
+                start()
+            }
+            previewPlayer = mp
+            _previewingMuezzinId.value = muezzinId
+        } catch (_: Exception) {
+            stopMuezzinPreview()
+        }
+    }
+
+    fun stopMuezzinPreview() {
+        try {
+            previewPlayer?.stop()
+            previewPlayer?.release()
+        } catch (_: Exception) {
+        }
+        previewPlayer = null
+        _previewingMuezzinId.value = null
     }
 
     fun setQuranLineHeight(multiplier: Float) {
