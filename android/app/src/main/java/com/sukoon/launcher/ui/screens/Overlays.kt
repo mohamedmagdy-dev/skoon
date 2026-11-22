@@ -4,6 +4,7 @@ import android.media.AudioManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,13 +13,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +43,7 @@ import com.sukoon.launcher.ui.theme.APP_FONT_OPTIONS
 import com.sukoon.launcher.ui.theme.LocalAppFont
 import com.sukoon.launcher.ui.theme.LocalAppStrings
 import com.sukoon.launcher.ui.theme.LocalSukoonColors
+import com.sukoon.launcher.ui.theme.fontOptionFor
 import kotlin.math.abs
 
 // =========================================
@@ -45,6 +53,7 @@ import kotlin.math.abs
 fun AppDrawerOverlay(
     state: LauncherState,
     installedApps: List<AppInfo>,
+    onLoadAppIcon: suspend (String) -> ImageBitmap?,
     onAppClick: (AppInfo) -> Unit,
     onToggleFavorite: (AppInfo) -> Unit,
     onToggleDistracting: (AppInfo) -> Unit,
@@ -120,14 +129,25 @@ fun AppDrawerOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = app.label,
-                        fontFamily = appFont,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Light,
-                        color = colors.textPrimary,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.weight(1f)
-                    )
+                    ) {
+                        AppIconView(
+                            packageName = app.packageName,
+                            displayStyle = state.appDisplayStyle,
+                            size = 32.dp,
+                            loadIcon = onLoadAppIcon
+                        )
+                        Text(
+                            text = app.label,
+                            fontFamily = appFont,
+                            fontSize = if (state.appDisplayStyle == "text") 19.sp else 17.sp,
+                            fontWeight = FontWeight.Light,
+                            color = colors.textPrimary
+                        )
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -393,7 +413,7 @@ private fun VolumeSliderRow(
 }
 
 // =========================================
-// 3. Settings & Customization Overlay
+// 3. Settings & Customization Overlay (v2 Organized Architecture)
 // =========================================
 @Composable
 fun SettingsOverlay(
@@ -402,16 +422,22 @@ fun SettingsOverlay(
     isAccessibilityConnected: Boolean,
     onSetLanguage: (String) -> Unit,
     onSetAppFont: (String) -> Unit,
+    onSetAppDisplayStyle: (String) -> Unit,
     onSetPrayerCity: (String) -> Unit,
     onSetQuranLineHeight: (Float) -> Unit,
     onMovePage: (Int, Int) -> Unit,
     onTogglePageEnabled: (String) -> Unit,
     onSetDarkTheme: (Boolean) -> Unit,
+    onToggleFocus: (Boolean) -> Unit,
+    onSetMindfulDuration: (Int) -> Unit,
+    onSetHaptics: (Boolean) -> Unit,
     onRefreshVolumes: () -> Unit,
     onSetVolume: (Int, Int) -> Unit,
     onToggleMute: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onOpenDefaultLauncherSettings: () -> Unit,
+    onRestartSetup: () -> Unit,
+    onResetApp: () -> Unit,
     onClose: () -> Unit
 ) {
     val colors = LocalSukoonColors.current
@@ -419,12 +445,13 @@ fun SettingsOverlay(
     val strings = LocalAppStrings.current
     LaunchedEffect(Unit) { onRefreshVolumes() }
 
-    var showCityPicker by remember { mutableStateOf(false) }
+    var category by remember { mutableStateOf("all") } // all | display | spiritual | focus | system
+    var openPanel by remember { mutableStateOf<String?>(null) } // fonts | city | tabs | volume
     var cityQuery by remember { mutableStateOf("") }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
-    val selectedCity = remember(state.prayerCityId) {
-        PrayerTimesCalculator.findCity(state.prayerCityId)
-    }
+    val selectedCity = remember(state.prayerCityId) { PrayerTimesCalculator.findCity(state.prayerCityId) }
+    val selectedFont = remember(state.appFontId) { fontOptionFor(state.appFontId) }
     val filteredCities = remember(cityQuery) {
         val q = cityQuery.trim()
         if (q.isEmpty()) PRAYER_CITIES
@@ -440,6 +467,8 @@ fun SettingsOverlay(
         state.pageConfig.filter { it.enabled || it.id == "home" }.map { it.id }
     }
     val homeEnabledIdx = enabledIds.indexOf("home")
+
+    fun showCat(cat: String) = category == "all" || category == cat
 
     Column(
         modifier = Modifier
@@ -462,6 +491,24 @@ fun SettingsOverlay(
             SmallChip(strings.done, active = true) { onClose() }
         }
 
+        // Category Filter Pills
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            listOf(
+                "all" to strings.catAll,
+                "display" to strings.catDisplay,
+                "spiritual" to strings.catSpiritual,
+                "focus" to strings.catFocus,
+                "system" to strings.catSystem
+            ).forEach { (id, label) ->
+                SmallChip(label = label, active = category == id) { category = id }
+            }
+        }
+
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
 
         Column(
@@ -470,242 +517,160 @@ fun SettingsOverlay(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // 1. Language
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.languageSection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                Text(strings.languageSubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallChip(
-                        label = "العربية",
-                        active = state.appLanguage == "ar",
-                        modifier = Modifier.weight(1f)
-                    ) { onSetLanguage("ar") }
-                    SmallChip(
-                        label = "English",
-                        active = state.appLanguage == "en",
-                        modifier = Modifier.weight(1f)
-                    ) { onSetLanguage("en") }
-                }
-            }
+            // ===== GROUP 1: DISPLAY & APPEARANCE =====
+            if (showCat("display")) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(strings.catDisplay, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
 
-            // 2. App Font
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.fontSection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                Text(strings.fontSubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
-                APP_FONT_OPTIONS.chunked(2).forEach { rowOptions ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowOptions.forEach { opt ->
-                            SmallChip(
-                                label = opt.localizedName(strings.isArabic),
-                                active = state.appFontId == opt.id,
-                                fontOverride = opt.family,
-                                modifier = Modifier.weight(1f)
-                            ) { onSetAppFont(opt.id) }
-                        }
-                        if (rowOptions.size == 1) {
-                            Spacer(Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-
-            // 3. Prayer Times City / Location
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.prayerCitySection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                Text(strings.prayerCitySubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.surface)
-                        .border(
-                            1.dp,
-                            if (showCityPicker) colors.accentWarm else colors.borderSubtle,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickable { showCityPicker = !showCityPicker }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = selectedCity.localizedName(strings.isArabic),
-                            fontFamily = appFont,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textPrimary
-                        )
-                        Text(
-                            text = selectedCity.localizedCountry(strings.isArabic),
-                            fontFamily = appFont,
-                            fontSize = 11.sp,
-                            color = colors.textSecondary
-                        )
-                    }
-                    SmallChip(if (showCityPicker) strings.close else strings.changeCityBtn, active = !showCityPicker) {
-                        showCityPicker = !showCityPicker
-                    }
-                }
-
-                if (showCityPicker) {
+                    // 3-Card App Display Style Selector
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(colors.surface)
-                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        BasicTextField(
-                            value = cityQuery,
-                            onValueChange = { cityQuery = it },
-                            textStyle = TextStyle(fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary),
-                            cursorBrush = SolidColor(colors.accentWarm),
-                            decorationBox = { inner ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(colors.background)
-                                        .padding(horizontal = 10.dp, vertical = 8.dp)
-                                ) {
-                                    if (cityQuery.isEmpty()) {
-                                        Text(strings.searchCityHint, fontFamily = appFont, fontSize = 13.sp, color = colors.textMuted)
-                                    }
-                                    inner()
-                                }
-                            }
-                        )
-
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 220.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        Column {
+                            Text(strings.appDisplaySection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                            Text(strings.appDisplaySubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(filteredCities, key = { it.id }) { city ->
-                                val isSelected = city.id == state.prayerCityId
-                                Row(
+                            listOf(
+                                Triple("text", strings.styleTextOnly, strings.styleTextOnlySub),
+                                Triple("monochrome", strings.styleMonochrome, strings.styleMonochromeSub),
+                                Triple("original", strings.styleOriginal, strings.styleOriginalSub)
+                            ).forEach { (id, title, sub) ->
+                                val active = state.appDisplayStyle == id
+                                Column(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isSelected) colors.accentWarmSoft else colors.background.copy(alpha = 0f))
-                                        .clickable {
-                                            onSetPrayerCity(city.id)
-                                            cityQuery = ""
-                                            showCityPicker = false
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 9.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (active) colors.accentWarmSoft else colors.background)
+                                        .border(1.dp, if (active) colors.accentWarm else colors.borderSubtle, RoundedCornerShape(10.dp))
+                                        .clickable { onSetAppDisplayStyle(id) }
+                                        .padding(vertical = 10.dp, horizontal = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
+                                    // Mini visual preview
+                                    Row(
+                                        modifier = Modifier.height(26.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        when (id) {
+                                            "text" -> Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Box(Modifier.width(34.dp).height(4.dp).clip(RoundedCornerShape(50)).background(colors.textPrimary.copy(alpha = 0.8f)))
+                                                Box(Modifier.width(22.dp).height(3.dp).clip(RoundedCornerShape(50)).background(colors.textMuted))
+                                            }
+                                            "monochrome" -> {
+                                                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(colors.surfaceHover).border(1.dp, colors.borderStrong, RoundedCornerShape(6.dp)))
+                                                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(colors.surfaceHover).border(1.dp, colors.borderStrong, RoundedCornerShape(6.dp)))
+                                            }
+                                            else -> {
+                                                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF25D366)))
+                                                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFEF4444)))
+                                            }
+                                        }
+                                    }
                                     Text(
-                                        text = city.localizedName(strings.isArabic),
-                                        fontFamily = appFont,
-                                        fontSize = 14.sp,
-                                        fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-                                        color = if (isSelected) colors.accentWarm else colors.textPrimary
-                                    )
-                                    Text(
-                                        text = city.localizedCountry(strings.isArabic) + if (isSelected) " ✓" else "",
+                                        text = title,
                                         fontFamily = appFont,
                                         fontSize = 11.sp,
-                                        color = if (isSelected) colors.accentWarm else colors.textMuted
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (active) colors.accentWarm else colors.textPrimary,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = sub,
+                                        fontFamily = appFont,
+                                        fontSize = 9.sp,
+                                        color = colors.textMuted,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
                         }
                     }
-                }
-            }
 
-            // 4. Quran Line Spacing
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.quranSpacingSection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                Text(strings.quranSpacingSubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
-                val presets = listOf(
-                    1.85f to strings.spacingCompact,
-                    2.15f to strings.spacingComfortable,
-                    2.45f to strings.spacingWide,
-                    2.75f to strings.spacingExtraWide
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    presets.forEach { (value, label) ->
-                        val active = abs(state.quranLineHeightMultiplier - value) < 0.12f
-                        SmallChip(
-                            label = label,
-                            active = active,
-                            modifier = Modifier.weight(1f)
-                        ) { onSetQuranLineHeight(value) }
-                    }
-                }
-            }
-
-            // 5. Appearance
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.appearanceSection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallChip(strings.darkOled, active = state.darkTheme, modifier = Modifier.weight(1f)) { onSetDarkTheme(true) }
-                    SmallChip(strings.lightPaper, active = !state.darkTheme, modifier = Modifier.weight(1f)) { onSetDarkTheme(false) }
-                }
-            }
-
-            // 6. Reorder Tabs
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.tabsOrderSection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                Text(strings.tabsOrderSubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
-
-                val total = state.pageConfig.size
-                for (visualIdx in 0 until total) {
-                    val configIdx = total - 1 - visualIdx
-                    val cfg = state.pageConfig[configIdx]
-                    val meta = PAGE_META_MAP[cfg.id] ?: continue
-                    val isHome = cfg.id == "home"
-
-                    val posLabel = when {
-                        !cfg.enabled && !isHome -> strings.hiddenLabel
-                        isHome -> strings.centerHomeLabel
-                        else -> {
-                            val idx = enabledIds.indexOf(cfg.id)
-                            if (idx > homeEnabledIdx) strings.rightOfHomeFmt((idx - homeEnabledIdx).formatDigits(strings.isArabic))
-                            else strings.leftOfHomeFmt((homeEnabledIdx - idx).formatDigits(strings.isArabic))
-                        }
-                    }
-
-                    Row(
+                    // Grouped Card: Theme + Language + Collapsible Fonts
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isHome) colors.accentWarmSoft else colors.surface)
-                            .border(
-                                1.dp,
-                                if (isHome) colors.accentWarm else colors.borderSubtle,
-                                RoundedCornerShape(12.dp)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surface)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(meta.localizedLabel(strings.isArabic), fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                            Text(posLabel, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                        // Theme Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.appearanceSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                SmallChip(strings.darkOled, active = state.darkTheme) { onSetDarkTheme(true) }
+                                SmallChip(strings.lightPaper, active = !state.darkTheme) { onSetDarkTheme(false) }
+                            }
                         }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            SmallChip("↑") { if (visualIdx > 0) onMovePage(configIdx, configIdx + 1) }
-                            SmallChip("↓") { if (visualIdx < total - 1) onMovePage(configIdx, configIdx - 1) }
-                            if (!meta.required) {
-                                SmallChip(if (cfg.enabled) strings.enabledLabel else strings.hiddenLabel, active = cfg.enabled) {
-                                    onTogglePageEnabled(cfg.id)
+                        // Language Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.languageSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                SmallChip("العربية", active = state.appLanguage == "ar") { onSetLanguage("ar") }
+                                SmallChip("English", active = state.appLanguage == "en") { onSetLanguage("en") }
+                            }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Collapsible Fonts Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { openPanel = if (openPanel == "fonts") null else "fonts" }
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.fontSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Text(
+                                text = "${selectedFont.localizedName(strings.isArabic)}  ${if (openPanel == "fonts") "▴" else "▾"}",
+                                fontFamily = appFont,
+                                fontSize = 12.sp,
+                                color = colors.accentWarm
+                            )
+                        }
+                        if (openPanel == "fonts") {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                APP_FONT_OPTIONS.chunked(2).forEach { rowOptions ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        rowOptions.forEach { opt ->
+                                            SmallChip(
+                                                label = opt.localizedName(strings.isArabic),
+                                                active = state.appFontId == opt.id,
+                                                fontOverride = opt.family,
+                                                modifier = Modifier.weight(1f)
+                                            ) { onSetAppFont(opt.id) }
+                                        }
+                                        if (rowOptions.size == 1) Spacer(Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
@@ -713,61 +678,379 @@ fun SettingsOverlay(
                 }
             }
 
-            // 7. Quick Volume Control
-            VolumeControlCard(
-                volumes = volumes,
-                onSetVolume = onSetVolume,
-                onToggleMute = onToggleMute
-            )
+            // ===== GROUP 2: SPIRITUAL =====
+            if (showCat("spiritual")) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(strings.catSpiritual, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
 
-            // 8. System Permissions (Fingerprint Accessibility & Default Home)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(strings.systemSettingsSection, fontFamily = appFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surface)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                    ) {
+                        // Prayer City Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { openPanel = if (openPanel == "city") null else "city" }
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.prayerCitySection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(selectedCity.localizedFull(strings.isArabic), fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                            }
+                            Text(
+                                text = "${if (openPanel == "city") strings.close else strings.changeCityBtn} ${if (openPanel == "city") "▴" else "▾"}",
+                                fontFamily = appFont,
+                                fontSize = 12.sp,
+                                color = colors.accentWarm
+                            )
+                        }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.surface)
-                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
-                        .clickable { onOpenAccessibilitySettings() }
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(strings.fingerprintTasbihTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
-                        Text(
-                            text = if (isAccessibilityConnected) strings.accessibilityActive else strings.accessibilityPrompt,
-                            fontFamily = appFont,
-                            fontSize = 11.sp,
-                            color = if (isAccessibilityConnected) colors.accentFocus else colors.accentWarm
-                        )
+                        if (openPanel == "city") {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                BasicTextField(
+                                    value = cityQuery,
+                                    onValueChange = { cityQuery = it },
+                                    textStyle = TextStyle(fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary),
+                                    cursorBrush = SolidColor(colors.accentWarm),
+                                    decorationBox = { inner ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(colors.background)
+                                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                                        ) {
+                                            if (cityQuery.isEmpty()) {
+                                                Text(strings.searchCityHint, fontFamily = appFont, fontSize = 13.sp, color = colors.textMuted)
+                                            }
+                                            inner()
+                                        }
+                                    }
+                                )
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    items(filteredCities, key = { it.id }) { city ->
+                                        val isSel = city.id == state.prayerCityId
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(if (isSel) colors.accentWarmSoft else Color.Transparent)
+                                                .clickable {
+                                                    onSetPrayerCity(city.id)
+                                                    cityQuery = ""
+                                                    openPanel = null
+                                                }
+                                                .padding(horizontal = 10.dp, vertical = 9.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(city.localizedName(strings.isArabic), fontFamily = appFont, fontSize = 13.sp, color = if (isSel) colors.accentWarm else colors.textPrimary)
+                                            Text(city.localizedCountry(strings.isArabic) + if (isSel) " ✓" else "", fontFamily = appFont, fontSize = 11.sp, color = if (isSel) colors.accentWarm else colors.textMuted)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Quran Line Spacing Row
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(strings.quranSpacingSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf(
+                                    1.85f to strings.spacingCompact,
+                                    2.15f to strings.spacingComfortable,
+                                    2.45f to strings.spacingWide,
+                                    2.75f to strings.spacingExtraWide
+                                ).forEach { (value, label) ->
+                                    SmallChip(
+                                        label = label,
+                                        active = abs(state.quranLineHeightMultiplier - value) < 0.12f,
+                                        modifier = Modifier.weight(1f)
+                                    ) { onSetQuranLineHeight(value) }
+                                }
+                            }
+                        }
                     }
-                    Text(strings.openChevron, fontFamily = appFont, fontSize = 12.sp, color = colors.textSecondary)
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.surface)
-                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
-                        .clickable { onOpenDefaultLauncherSettings() }
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(strings.defaultLauncherTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
-                        Text(strings.defaultLauncherSubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
-                    }
-                    Text(strings.openChevron, fontFamily = appFont, fontSize = 12.sp, color = colors.textSecondary)
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            // ===== GROUP 3: FOCUS & NAVIGATION =====
+            if (showCat("focus")) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(strings.catFocus, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surface)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                    ) {
+                        // Focus Mode Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.focusOn.takeIf { state.focusMode } ?: strings.normalMode, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Switch(
+                                checked = state.focusMode,
+                                onCheckedChange = onToggleFocus,
+                                colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                            )
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Mindful Duration Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.mindfulDurationLabel, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf(3, 5, 10).forEach { sec ->
+                                    SmallChip("${sec.formatDigits(strings.isArabic)}s", active = state.mindfulPauseSeconds == sec) {
+                                        onSetMindfulDuration(sec)
+                                    }
+                                }
+                            }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Haptics Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.hapticsLabel, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Switch(
+                                checked = state.hapticsEnabled,
+                                onCheckedChange = onSetHaptics,
+                                colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                            )
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Collapsible Tabs Reorder Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { openPanel = if (openPanel == "tabs") null else "tabs" }
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.tabsOrderSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary, modifier = Modifier.weight(1f))
+                            Text(
+                                text = "${enabledIds.size.formatDigits(strings.isArabic)}/${state.pageConfig.size.formatDigits(strings.isArabic)} ${if (openPanel == "tabs") "▴" else "▾"}",
+                                fontFamily = appFont,
+                                fontSize = 12.sp,
+                                color = colors.accentWarm
+                            )
+                        }
+
+                        if (openPanel == "tabs") {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val total = state.pageConfig.size
+                                for (visualIdx in 0 until total) {
+                                    val configIdx = total - 1 - visualIdx
+                                    val cfg = state.pageConfig[configIdx]
+                                    val meta = PAGE_META_MAP[cfg.id] ?: continue
+                                    val isHome = cfg.id == "home"
+                                    val posLabel = when {
+                                        !cfg.enabled && !isHome -> strings.hiddenLabel
+                                        isHome -> strings.centerHomeLabel
+                                        else -> {
+                                            val idx = enabledIds.indexOf(cfg.id)
+                                            if (idx > homeEnabledIdx) strings.rightOfHomeFmt((idx - homeEnabledIdx).formatDigits(strings.isArabic))
+                                            else strings.leftOfHomeFmt((homeEnabledIdx - idx).formatDigits(strings.isArabic))
+                                        }
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isHome) colors.accentWarmSoft else colors.background)
+                                            .border(1.dp, if (isHome) colors.accentWarm else colors.borderSubtle, RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(meta.localizedLabel(strings.isArabic), fontFamily = appFont, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                                            Text(posLabel, fontFamily = appFont, fontSize = 10.sp, color = colors.textSecondary)
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            SmallChip("↑") { if (visualIdx > 0) onMovePage(configIdx, configIdx + 1) }
+                                            SmallChip("↓") { if (visualIdx < total - 1) onMovePage(configIdx, configIdx - 1) }
+                                            if (!meta.required) {
+                                                SmallChip(if (cfg.enabled) strings.enabledLabel else strings.hiddenLabel, active = cfg.enabled) {
+                                                    onTogglePageEnabled(cfg.id)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===== GROUP 4: SYSTEM & VOLUME =====
+            if (showCat("system")) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(strings.catSystem, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surface)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                    ) {
+                        // Collapsible Volume Control
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { openPanel = if (openPanel == "volume") null else "volume" }
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.quickVolumeControl, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Text(if (openPanel == "volume") "▴" else "▾", fontSize = 13.sp, color = colors.textSecondary)
+                        }
+                        if (openPanel == "volume") {
+                            Box(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
+                                VolumeControlCard(volumes = volumes, onSetVolume = onSetVolume, onToggleMute = onToggleMute)
+                            }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Accessibility
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenAccessibilitySettings() }
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.fingerprintTasbihTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(
+                                    text = if (isAccessibilityConnected) strings.accessibilityActive else strings.accessibilityPrompt,
+                                    fontFamily = appFont,
+                                    fontSize = 11.sp,
+                                    color = if (isAccessibilityConnected) colors.accentFocus else colors.accentWarm
+                                )
+                            }
+                            Text(strings.openChevron, fontFamily = appFont, fontSize = 12.sp, color = colors.textSecondary)
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Default Launcher
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenDefaultLauncherSettings() }
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.defaultLauncherTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(strings.defaultLauncherSubtitle, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
+                            }
+                            Text(strings.openChevron, fontFamily = appFont, fontSize = 12.sp, color = colors.textSecondary)
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Restart Setup
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onClose()
+                                    onRestartSetup()
+                                }
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.restartSetupTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(strings.restartSetupSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
+                            }
+                            Text("↻", fontSize = 15.sp, color = colors.textSecondary)
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Reset App
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showResetConfirm = true }
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.resetAppTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.dangerSoft)
+                                Text(strings.resetAppSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
         }
+    }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            containerColor = colors.surface,
+            title = { Text(strings.resetAppTitle, fontFamily = appFont, color = colors.textPrimary) },
+            text = { Text(strings.confirmResetAppMsg, fontFamily = appFont, color = colors.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    onClose()
+                    onResetApp()
+                }) {
+                    Text(strings.reset, fontFamily = appFont, color = colors.dangerSoft)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text(strings.cancel, fontFamily = appFont, color = colors.textSecondary)
+                }
+            }
+        )
     }
 }
 

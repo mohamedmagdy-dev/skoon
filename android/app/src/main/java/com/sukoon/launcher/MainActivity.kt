@@ -122,24 +122,38 @@ class MainActivity : ComponentActivity() {
                 appLanguage = state.appLanguage
             ) {
                 CompositionLocalProvider(LocalLayoutDirection provides layoutDir) {
-                    SukoonLauncherRoot(
-                        viewModel = viewModel,
-                        onSetBlackScreenWindow = { enabled -> setBlackScreenMode(enabled) },
-                        onOpenAccessibility = {
-                            try {
-                                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                            } catch (_: Exception) {
-                                viewModel.showToast(stringsFor(state.appLanguage).toastAccessibilityFallback)
+                    if (state.onboardingStatus != "completed") {
+                        OnboardingScreen(
+                            state = state,
+                            onSetStep = { viewModel.setOnboardingStep(it) },
+                            onSetLanguage = { viewModel.setAppLanguage(it) },
+                            onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
+                            onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
+                            onSetDarkTheme = { viewModel.setDarkTheme(it) },
+                            onSetAppFont = { viewModel.setAppFont(it) },
+                            onSetPrayerCity = { viewModel.setPrayerCity(it) },
+                            onComplete = { viewModel.completeOnboarding() }
+                        )
+                    } else {
+                        SukoonLauncherRoot(
+                            viewModel = viewModel,
+                            onSetBlackScreenWindow = { enabled -> setBlackScreenMode(enabled) },
+                            onOpenAccessibility = {
+                                try {
+                                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                } catch (_: Exception) {
+                                    viewModel.showToast(stringsFor(state.appLanguage).toastAccessibilityFallback)
+                                }
+                            },
+                            onOpenDefaultHome = {
+                                try {
+                                    startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+                                } catch (_: Exception) {
+                                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                                }
                             }
-                        },
-                        onOpenDefaultHome = {
-                            try {
-                                startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-                            } catch (_: Exception) {
-                                startActivity(Intent(Settings.ACTION_SETTINGS))
-                            }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -274,6 +288,7 @@ private fun SukoonLauncherRoot(
                                         installedApps = installedApps,
                                         rightTabLabel = rightId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
                                         leftTabLabel = leftId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
+                                        onLoadAppIcon = { viewModel.loadAppIcon(it) },
                                         onAppClick = { viewModel.onAppClick(it) },
                                         onRemoveFavorite = { viewModel.toggleFavorite(it.packageName, it.label) },
                                         onToggleFocus = { viewModel.toggleFocusMode() },
@@ -392,6 +407,7 @@ private fun SukoonLauncherRoot(
             AppDrawerOverlay(
                 state = state,
                 installedApps = installedApps,
+                onLoadAppIcon = { viewModel.loadAppIcon(it) },
                 onAppClick = { viewModel.onAppClick(it) },
                 onToggleFavorite = { viewModel.toggleFavorite(it.packageName, it.label) },
                 onToggleDistracting = { viewModel.toggleDistracting(it.packageName, it.label) },
@@ -424,16 +440,22 @@ private fun SukoonLauncherRoot(
                 isAccessibilityConnected = isAccConnected,
                 onSetLanguage = { viewModel.setAppLanguage(it) },
                 onSetAppFont = { viewModel.setAppFont(it) },
+                onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
                 onSetPrayerCity = { viewModel.setPrayerCity(it) },
                 onSetQuranLineHeight = { viewModel.setQuranLineHeight(it) },
                 onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
                 onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
                 onSetDarkTheme = { viewModel.setDarkTheme(it) },
+                onToggleFocus = { viewModel.toggleFocusMode(it) },
+                onSetMindfulDuration = { viewModel.setMindfulPauseSeconds(it) },
+                onSetHaptics = { viewModel.setHapticsEnabled(it) },
                 onRefreshVolumes = { viewModel.refreshVolumes() },
                 onSetVolume = { s, v -> viewModel.setStreamVolume(s, v) },
                 onToggleMute = { viewModel.toggleMuteAll() },
                 onOpenAccessibilitySettings = onOpenAccessibility,
                 onOpenDefaultLauncherSettings = onOpenDefaultHome,
+                onRestartSetup = { viewModel.restartSetup() },
+                onResetApp = { viewModel.resetApp() },
                 onClose = { showSettings = false }
             )
         }

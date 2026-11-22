@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sukoon.launcher.data.*
@@ -141,6 +142,7 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun vibrateLight() {
+        if (!_state.value.hapticsEnabled) return
         val vib = vibrator ?: return
         if (!vib.hasVibrator()) return
         try {
@@ -155,6 +157,7 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun vibrateSuccess() {
+        if (!_state.value.hapticsEnabled) return
         val vib = vibrator ?: return
         if (!vib.hasVibrator()) return
         try {
@@ -167,6 +170,8 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
         } catch (_: Exception) {
         }
     }
+
+    suspend fun loadAppIcon(packageName: String): ImageBitmap? = repo.loadAppIcon(packageName)
 
     // ===== Apps =====
     fun refreshApps() {
@@ -207,10 +212,11 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun startMindfulPause(app: AppInfo) {
         mindfulJob?.cancel()
+        val duration = _state.value.mindfulPauseSeconds.coerceIn(3, 15)
         _mindfulApp.value = app
-        _mindfulSecondsLeft.value = 5
+        _mindfulSecondsLeft.value = duration
         mindfulJob = viewModelScope.launch {
-            for (sec in 4 downTo 0) {
+            for (sec in (duration - 1) downTo 0) {
                 delay(1000)
                 _mindfulSecondsLeft.value = sec
             }
@@ -255,6 +261,49 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     fun setQuranLineHeight(multiplier: Float) {
         val clamped = multiplier.coerceIn(1.6f, 2.9f)
         updateState { it.copy(quranLineHeightMultiplier = clamped) }
+    }
+
+    fun setAppDisplayStyle(style: String) {
+        val normalized = when (style) {
+            "monochrome", "original" -> style
+            else -> "text"
+        }
+        updateState { it.copy(appDisplayStyle = normalized) }
+    }
+
+    fun setMindfulPauseSeconds(seconds: Int) {
+        updateState { it.copy(mindfulPauseSeconds = seconds.coerceIn(3, 15)) }
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        updateState { it.copy(hapticsEnabled = enabled) }
+    }
+
+    // ===== Onboarding & Reset =====
+    fun setOnboardingStep(step: Int) {
+        updateState { s ->
+            s.copy(
+                onboardingStep = step.coerceIn(0, 7),
+                onboardingStatus = if (s.onboardingStatus == "not_started" && step > 0) "in_progress" else s.onboardingStatus
+            )
+        }
+    }
+
+    fun completeOnboarding() {
+        updateState { it.copy(onboardingStatus = "completed", onboardingStep = 0) }
+    }
+
+    fun restartSetup() {
+        updateState { it.copy(onboardingStatus = "in_progress", onboardingStep = 1) }
+    }
+
+    fun resetApp() {
+        val apps = _installedApps.value
+        val fresh = LauncherState(
+            favoritePackages = if (apps.isNotEmpty()) repo.pickInitialFavorites(apps) else emptyList()
+        )
+        _state.value = fresh
+        flushPendingSave()
     }
 
     fun toggleFocusMode(force: Boolean? = null) {

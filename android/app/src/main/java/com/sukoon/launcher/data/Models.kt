@@ -36,11 +36,16 @@ data class NoteItem(
 
 @Serializable
 data class LauncherState(
+    val onboardingStatus: String = "not_started", // "not_started" | "in_progress" | "completed"
+    val onboardingStep: Int = 0,
     val darkTheme: Boolean = true,
     val appLanguage: String = "ar", // "ar" | "en"
     val appFontId: String = "ibm", // "ibm" | "tajawal" | "almarai" | "amiri" | "system"
+    val appDisplayStyle: String = "text", // "text" | "monochrome" | "original"
     val prayerCityId: String = "alexandria",
     val focusMode: Boolean = false,
+    val mindfulPauseSeconds: Int = 5,
+    val hapticsEnabled: Boolean = true,
     val pageConfig: List<PageConfig> = defaultPageConfig(),
     val favoritePackages: List<String> = emptyList(),
     val distractingPackages: List<String> = defaultDistractingPackages(),

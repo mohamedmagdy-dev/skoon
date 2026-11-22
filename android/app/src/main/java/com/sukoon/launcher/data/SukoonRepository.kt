@@ -3,7 +3,11 @@ package com.sukoon.launcher.data
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Build
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -14,6 +18,7 @@ import java.io.File
 import java.text.Collator
 import java.time.LocalDate
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 class SukoonRepository(private val context: Context) {
 
@@ -32,6 +37,27 @@ class SukoonRepository(private val context: Context) {
 
     @Volatile
     private var cachedQuranPages: List<QuranPage>? = null
+
+    private val iconCache = ConcurrentHashMap<String, ImageBitmap>()
+
+    suspend fun loadAppIcon(packageName: String): ImageBitmap? {
+        iconCache[packageName]?.let { return it }
+        return withContext(Dispatchers.IO) {
+            try {
+                val drawable = context.packageManager.getApplicationIcon(packageName)
+                val size = 96
+                val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                drawable.setBounds(0, 0, size, size)
+                drawable.draw(canvas)
+                val img = bitmap.asImageBitmap()
+                iconCache[packageName] = img
+                img
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
 
     fun loadState(): LauncherState {
         val loaded = try {
