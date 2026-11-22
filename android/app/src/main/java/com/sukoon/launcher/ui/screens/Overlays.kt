@@ -439,13 +439,18 @@ fun SettingsOverlay(
     onToggleAdhan: (Boolean) -> Unit,
     onSetAdhanMuezzin: (String) -> Unit,
     onToggleMuezzinPreview: (String) -> Unit,
+    onTogglePrayerAutoFocus: (Boolean) -> Unit,
+    onSetPrayerAutoFocusMinutes: (Int) -> Unit,
+    onTogglePrayerTracker: (Boolean) -> Unit,
     onOpenQibla: () -> Unit,
     onSetQuranLineHeight: (Float) -> Unit,
     onMovePage: (Int, Int) -> Unit,
     onTogglePageEnabled: (String) -> Unit,
     onSetDarkTheme: (Boolean) -> Unit,
+    onToggleAnimations: (Boolean) -> Unit,
     onToggleFocus: (Boolean) -> Unit,
     onSetMindfulDuration: (Int) -> Unit,
+    onToggleMindfulTimeBox: (Boolean) -> Unit,
     onSetHaptics: (Boolean) -> Unit,
     onRefreshVolumes: () -> Unit,
     onSetVolume: (Int, Int) -> Unit,
@@ -743,6 +748,25 @@ fun SettingsOverlay(
                                 }
                             }
                         }
+
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Smooth Animations & Motion Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.animationsTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(strings.animationsSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                            }
+                            Switch(
+                                checked = state.animationsEnabled,
+                                onCheckedChange = onToggleAnimations,
+                                colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                            )
+                        }
                     }
                 }
             }
@@ -987,6 +1011,65 @@ fun SettingsOverlay(
 
                         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
 
+                        // Auto-Focus at Prayer Times Row
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(strings.prayerAutoFocusTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                    Text(strings.prayerAutoFocusSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                                Switch(
+                                    checked = state.prayerAutoFocusEnabled,
+                                    onCheckedChange = onTogglePrayerAutoFocus,
+                                    colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                                )
+                            }
+
+                            if (state.prayerAutoFocusEnabled) {
+                                Text(strings.prayerAutoFocusDurationLabel, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(15, 20, 30).forEach { mins ->
+                                        SmallChip(
+                                            label = strings.minutesShortFmt(mins.formatDigits(strings.isArabic)),
+                                            active = state.prayerAutoFocusMinutes == mins,
+                                            modifier = Modifier.weight(1f)
+                                        ) { onSetPrayerAutoFocusMinutes(mins) }
+                                    }
+                                }
+                            }
+                        }
+
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Daily Prayer Tracker Toggle Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.prayerTrackerTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(strings.prayerTrackerSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                            }
+                            Switch(
+                                checked = state.prayerTrackerEnabled,
+                                onCheckedChange = onTogglePrayerTracker,
+                                colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                            )
+                        }
+
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
                         // Quran Line Spacing Row
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(14.dp),
@@ -1053,6 +1136,24 @@ fun SettingsOverlay(
                                     }
                                 }
                             }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Time-Boxed Mindful Pause Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.mindfulTimeBoxTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(strings.mindfulTimeBoxSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                            }
+                            Switch(
+                                checked = state.mindfulTimeBoxEnabled,
+                                onCheckedChange = onToggleMindfulTimeBox,
+                                colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                            )
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
 
@@ -1305,8 +1406,9 @@ fun SettingsOverlay(
 fun MindfulPauseOverlay(
     app: AppInfo,
     secondsLeft: Int,
+    timeBoxEnabled: Boolean = true,
     onStay: () -> Unit,
-    onProceed: () -> Unit
+    onProceed: (Int?) -> Unit
 ) {
     val colors = LocalSukoonColors.current
     val appFont = LocalAppFont.current
@@ -1369,22 +1471,79 @@ fun MindfulPauseOverlay(
                 Text(strings.returnToCalm, fontFamily = appFont, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.background)
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.surface)
-                    .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
-                    .clickable(enabled = secondsLeft == 0) { onProceed() }
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (secondsLeft > 0) strings.waitSecondsFmt(secondsLeft.formatDigits(strings.isArabic)) else strings.openAppFmt(app.label),
-                    fontFamily = appFont,
-                    fontSize = 14.sp,
-                    color = if (secondsLeft > 0) colors.textMuted else colors.textSecondary
-                )
+            if (secondsLeft > 0 || !timeBoxEnabled) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surface)
+                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                        .clickable(enabled = secondsLeft == 0) { onProceed(null) }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (secondsLeft > 0) strings.waitSecondsFmt(secondsLeft.formatDigits(strings.isArabic)) else strings.openAppFmt(app.label),
+                        fontFamily = appFont,
+                        fontSize = 14.sp,
+                        color = if (secondsLeft > 0) colors.textMuted else colors.textSecondary
+                    )
+                }
+            } else {
+                // Time-Boxed Mindful Pause: ask intended duration before launching
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.surface)
+                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                        .padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = strings.mindfulChooseDuration,
+                        fontFamily = appFont,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.accentWarm
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(5, 10, 15).forEach { mins ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(colors.accentWarmSoft)
+                                    .border(1.dp, colors.accentWarm.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                    .clickable { onProceed(mins) }
+                                    .padding(vertical = 11.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = strings.minutesShortFmt(mins.formatDigits(strings.isArabic)),
+                                    fontFamily = appFont,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.accentWarm
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = strings.mindfulOpenWithoutTimer,
+                        fontFamily = appFont,
+                        fontSize = 12.sp,
+                        color = colors.textMuted,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onProceed(null) }
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
     }

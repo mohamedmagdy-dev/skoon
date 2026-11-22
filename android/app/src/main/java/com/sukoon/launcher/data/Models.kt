@@ -53,8 +53,15 @@ data class LauncherState(
     val prayerReminderMinutesBefore: Int = 10,
     val adhanEnabled: Boolean = false,
     val adhanMuezzinId: String = "makkah", // "makkah" | "madinah" | "alafasy" | "egypt" | "chime"
+    val prayerAutoFocusEnabled: Boolean = false,
+    val prayerAutoFocusMinutes: Int = 20, // 15 | 20 | 30
+    val prayerTrackerEnabled: Boolean = true,
+    val prayersCompletedDate: String = "",
+    val prayersCompleted: List<String> = emptyList(),
     val focusMode: Boolean = false,
     val mindfulPauseSeconds: Int = 5,
+    val mindfulTimeBoxEnabled: Boolean = true,
+    val animationsEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
     val pageConfig: List<PageConfig> = defaultPageConfig(),
     val favoritePackages: List<String> = emptyList(),

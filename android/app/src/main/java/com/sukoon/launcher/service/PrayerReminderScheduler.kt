@@ -319,3 +319,176 @@ class AdhanReceiver : BroadcastReceiver() {
         }
     }
 }
+
+object PrayerAutoFocusScheduler {
+    private const val START_REQUEST_CODE = 7721
+    private const val END_REQUEST_CODE = 7722
+    const val EXTRA_DURATION_MINUTES = "duration_minutes"
+
+    fun cancel(context: Context) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val startPi = PendingIntent.getBroadcast(
+            context,
+            START_REQUEST_CODE,
+            Intent(context, PrayerAutoFocusStartReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val endPi = PendingIntent.getBroadcast(
+            context,
+            END_REQUEST_CODE,
+            Intent(context, PrayerAutoFocusEndReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        am.cancel(startPi)
+        am.cancel(endPi)
+    }
+
+    fun scheduleNext(context: Context, state: LauncherState) {
+        if (!state.prayerAutoFocusEnabled) {
+            cancel(context)
+            return
+        }
+        val now = System.currentTimeMillis()
+        val info = PrayerTimesCalculator.getNextPrayerForState(state, now)
+        val triggerAt = now + info.remainingMinutes.coerceAtLeast(1) * 60_000L
+
+        val intent = Intent(context, PrayerAutoFocusStartReceiver::class.java).apply {
+            putExtra(EXTRA_DURATION_MINUTES, state.prayerAutoFocusMinutes.coerceIn(10, 60))
+        }
+        val pi = PendingIntent.getBroadcast(
+            context,
+            START_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        try {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun scheduleEnd(context: Context, durationMinutes: Int) {
+        val endAt = System.currentTimeMillis() + durationMinutes.coerceIn(5, 60) * 60_000L
+        val pi = PendingIntent.getBroadcast(
+            context,
+            END_REQUEST_CODE,
+            Intent(context, PrayerAutoFocusEndReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        try {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt, pi)
+        } catch (_: Exception) {
+        }
+    }
+}
+
+class PrayerAutoFocusStartReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        val duration = intent?.getIntExtra(PrayerAutoFocusScheduler.EXTRA_DURATION_MINUTES, 20) ?: 20
+        SukoonNotificationService.startPrayerAutoFocus(context, duration)
+        PrayerAutoFocusScheduler.scheduleEnd(context, duration)
+
+        try {
+            val repo = SukoonRepository(context)
+            val state = repo.loadState()
+            if (state.prayerAutoFocusEnabled) {
+                PrayerAutoFocusScheduler.scheduleNext(context, state)
+            }
+        } catch (_: Exception) {
+        }
+    }
+}
+
+class PrayerAutoFocusEndReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        SukoonNotificationService.endPrayerAutoFocus(context)
+    }
+}
+
+object TimeBoxReminderScheduler {
+    const val CHANNEL_ID = "sukoon_timebox_reminders_v1"
+    private const val REQUEST_CODE = 7731
+    const val EXTRA_APP_LABEL = "app_label"
+    const val EXTRA_MINUTES = "minutes"
+    const val EXTRA_LANG = "lang"
+
+    fun ensureChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "تذكير وقت الاستخدام • Mindful Time-Box",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Gentle reminders when your chosen app duration ends"
+                enableVibration(true)
+            }
+            nm.createNotificationChannel(channel)
+        }
+    }
+
+    fun schedule(context: Context, appLabel: String, minutes: Int, lang: String) {
+        ensureChannel(context)
+        val triggerAt = System.currentTimeMillis() + minutes.coerceIn(1, 60) * 60_000L
+        val intent = Intent(context, TimeBoxReminderReceiver::class.java).apply {
+            putExtra(EXTRA_APP_LABEL, appLabel)
+            putExtra(EXTRA_MINUTES, minutes)
+            putExtra(EXTRA_LANG, lang)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        try {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        } catch (_: Exception) {
+        }
+    }
+}
+
+class TimeBoxReminderReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        TimeBoxReminderScheduler.ensureChannel(context)
+        val appLabel = intent?.getStringExtra(TimeBoxReminderScheduler.EXTRA_APP_LABEL) ?: "App"
+        val mins = intent?.getIntExtra(TimeBoxReminderScheduler.EXTRA_MINUTES, 5) ?: 5
+        val isAr = (intent?.getStringExtra(TimeBoxReminderScheduler.EXTRA_LANG) ?: "ar") != "en"
+
+        val title = if (isAr) "انتهت مدة الـ ${mins.formatDigits(true)} دقائق" else "${mins}m Mindful Timer Finished"
+        val body = if (isAr) {
+            "قضيت وقتك المحدد في $appLabel — اضغط للعودة إلى سكونك"
+        } else {
+            "Your planned time in $appLabel is up — tap to return to Sukoon"
+        }
+
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPi = PendingIntent.getActivity(
+            context,
+            2,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notif = NotificationCompat.Builder(context, TimeBoxReminderScheduler.CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openPi)
+            .build()
+
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.notify(7732, notif)
+        } catch (_: SecurityException) {
+        }
+    }
+}

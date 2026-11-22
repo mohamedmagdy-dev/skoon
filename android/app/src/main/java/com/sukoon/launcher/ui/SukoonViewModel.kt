@@ -16,9 +16,11 @@ import androidx.lifecycle.viewModelScope
 import com.sukoon.launcher.data.*
 import com.sukoon.launcher.service.AdhanScheduler
 import com.sukoon.launcher.service.CapturedNotification
+import com.sukoon.launcher.service.PrayerAutoFocusScheduler
 import com.sukoon.launcher.service.PrayerReminderScheduler
 import com.sukoon.launcher.service.SukoonAccessibilityService
 import com.sukoon.launcher.service.SukoonNotificationService
+import com.sukoon.launcher.service.TimeBoxReminderScheduler
 import com.sukoon.launcher.service.muezzinOptionFor
 import com.sukoon.launcher.ui.theme.fontOptionFor
 import com.sukoon.launcher.ui.theme.stringsFor
@@ -72,6 +74,8 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     // Mindful Pause state
     private val _mindfulApp = MutableStateFlow<AppInfo?>(null)
     val mindfulApp: StateFlow<AppInfo?> = _mindfulApp.asStateFlow()
+
+    val prayerAutoFocusUntil: StateFlow<Long> = SukoonNotificationService.prayerAutoFocusUntil
 
     private val _mindfulSecondsLeft = MutableStateFlow(5)
     val mindfulSecondsLeft: StateFlow<Int> = _mindfulSecondsLeft.asStateFlow()
@@ -250,9 +254,13 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
         _mindfulApp.value = null
     }
 
-    fun proceedMindfulApp() {
+    fun proceedMindfulApp(timeBoxMinutes: Int? = null) {
         val app = _mindfulApp.value ?: return
         dismissMindfulPause()
+        if (timeBoxMinutes != null && timeBoxMinutes > 0) {
+            TimeBoxReminderScheduler.schedule(getApplication(), app.label, timeBoxMinutes, _state.value.appLanguage)
+            showToast(strings.toastTimeBoxScheduledFmt(timeBoxMinutes.formatDigits(strings.isArabic), app.label))
+        }
         repo.launchApp(app.packageName)
     }
 
@@ -343,6 +351,59 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
         if (cur.adhanEnabled) {
             AdhanScheduler.scheduleNext(getApplication(), cur)
         }
+        if (cur.prayerAutoFocusEnabled) {
+            PrayerAutoFocusScheduler.scheduleNext(getApplication(), cur)
+        }
+        SukoonNotificationService.syncPrayerAutoFocusState(getApplication())
+    }
+
+    fun setPrayerAutoFocusEnabled(enabled: Boolean) {
+        updateState { it.copy(prayerAutoFocusEnabled = enabled) }
+        val cur = _state.value
+        if (enabled) {
+            PrayerAutoFocusScheduler.scheduleNext(getApplication(), cur)
+            showToast(strings.toastPrayerAutoFocusOnFmt(cur.prayerAutoFocusMinutes.formatDigits(strings.isArabic)))
+        } else {
+            PrayerAutoFocusScheduler.cancel(getApplication())
+            SukoonNotificationService.endPrayerAutoFocus(getApplication())
+            showToast(strings.toastPrayerAutoFocusOff)
+        }
+    }
+
+    fun setPrayerAutoFocusMinutes(minutes: Int) {
+        val clamped = minutes.coerceIn(10, 60)
+        updateState { it.copy(prayerAutoFocusMinutes = clamped) }
+        val cur = _state.value
+        if (cur.prayerAutoFocusEnabled) {
+            PrayerAutoFocusScheduler.scheduleNext(getApplication(), cur)
+            showToast(strings.toastPrayerAutoFocusOnFmt(clamped.formatDigits(strings.isArabic)))
+        }
+    }
+
+    fun setPrayerTrackerEnabled(enabled: Boolean) {
+        updateState { it.copy(prayerTrackerEnabled = enabled) }
+    }
+
+    fun togglePrayerCompleted(prayerId: String) {
+        if (!_state.value.prayerTrackerEnabled) return
+        val today = java.time.LocalDate.now().toString()
+        updateState { s ->
+            val currentList = if (s.prayersCompletedDate == today) s.prayersCompleted else emptyList()
+            val nextList = if (prayerId in currentList) currentList - prayerId else currentList + prayerId
+            s.copy(
+                prayersCompletedDate = today,
+                prayersCompleted = nextList
+            )
+        }
+        vibrateLight()
+    }
+
+    fun setMindfulTimeBoxEnabled(enabled: Boolean) {
+        updateState { it.copy(mindfulTimeBoxEnabled = enabled) }
+    }
+
+    fun setAnimationsEnabled(enabled: Boolean) {
+        updateState { it.copy(animationsEnabled = enabled) }
     }
 
     fun setAdhanEnabled(enabled: Boolean) {

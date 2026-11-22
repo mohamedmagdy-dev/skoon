@@ -2,6 +2,14 @@ package com.sukoon.launcher.ui.screens
 
 import android.icu.text.SimpleDateFormat
 import android.icu.util.IslamicCalendar
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +33,7 @@ import com.sukoon.launcher.data.AppInfo
 import com.sukoon.launcher.data.LauncherState
 import com.sukoon.launcher.data.PrayerTimesCalculator
 import com.sukoon.launcher.data.formatDigits
+import com.sukoon.launcher.ui.theme.LocalAnimationsEnabled
 import com.sukoon.launcher.ui.theme.LocalAppFont
 import com.sukoon.launcher.ui.theme.LocalAppFontWeight
 import com.sukoon.launcher.ui.theme.LocalAppStrings
@@ -47,6 +56,8 @@ fun HomeScreen(
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenQibla: () -> Unit,
+    isPrayerAutoFocusActive: Boolean = false,
+    onTogglePrayerCompleted: (String) -> Unit = {},
     onNavigateRight: () -> Unit,
     onNavigateLeft: () -> Unit
 ) {
@@ -54,6 +65,7 @@ fun HomeScreen(
     val appFont = LocalAppFont.current
     val appWeight = LocalAppFontWeight.current
     val strings = LocalAppStrings.current
+    val animationsEnabled = LocalAnimationsEnabled.current
     var editingFavorites by remember { mutableStateOf(false) }
     var showAllPrayers by remember { mutableStateOf(false) }
 
@@ -66,6 +78,11 @@ fun HomeScreen(
             val delayToNextMinute = (60_000L - (now % 60_000L)).coerceAtLeast(1_000L)
             delay(delayToNextMinute)
         }
+    }
+
+    val todayKey = remember(nowMillis / 60_000) { java.time.LocalDate.now().toString() }
+    val completedPrayers = remember(state.prayersCompletedDate, state.prayersCompleted, todayKey) {
+        if (state.prayersCompletedDate == todayKey) state.prayersCompleted.toSet() else emptySet()
     }
 
     val prayerInfo = remember(
@@ -193,15 +210,48 @@ fun HomeScreen(
                         )
                     }
                 }
-                Text(
-                    text = if (showAllPrayers) "▴" else "▾",
-                    fontSize = 14.sp,
-                    color = colors.textMuted
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (state.prayerTrackerEnabled) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (completedPrayers.size >= 5) colors.accentWarmSoft else colors.background)
+                                .border(
+                                    1.dp,
+                                    if (completedPrayers.size >= 5) colors.accentWarm else colors.borderSubtle,
+                                    RoundedCornerShape(50)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = strings.prayersTrackedFmt(
+                                    completedPrayers.size.formatDigits(strings.isArabic),
+                                    5.formatDigits(strings.isArabic)
+                                ),
+                                fontFamily = appFont,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (completedPrayers.isNotEmpty()) colors.accentWarm else colors.textMuted
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (showAllPrayers) "▴" else "▾",
+                        fontSize = 14.sp,
+                        color = colors.textMuted
+                    )
+                }
             }
 
-            // Expandable All 5 Prayers Strip + City Header
-            if (showAllPrayers) {
+            // Expandable All 5 Prayers Strip + Prayer Tracker + City Header
+            AnimatedVisibility(
+                visible = showAllPrayers,
+                enter = if (animationsEnabled) fadeIn(tween(180)) + expandVertically(tween(220)) else EnterTransition.None,
+                exit = if (animationsEnabled) fadeOut(tween(140)) + shrinkVertically(tween(180)) else ExitTransition.None
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -252,22 +302,93 @@ fun HomeScreen(
                     ) {
                         prayerInfo.todayPrayers.forEach { p ->
                             val isNext = p.id == prayerInfo.nextPrayer.id
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val isDone = state.prayerTrackerEnabled && p.id in completedPrayers
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .then(
+                                        if (isDone) Modifier.background(colors.accentWarmSoft)
+                                        else Modifier
+                                    )
+                                    .then(
+                                        if (state.prayerTrackerEnabled) {
+                                            Modifier.clickable { onTogglePrayerCompleted(p.id) }
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                            ) {
                                 Text(
                                     text = p.localizedName(strings.isArabic),
                                     fontFamily = appFont,
                                     fontSize = 11.sp,
-                                    fontWeight = if (isNext) FontWeight.Medium else FontWeight.Normal,
-                                    color = if (isNext) colors.accentWarm else colors.textMuted
+                                    fontWeight = if (isNext || isDone) FontWeight.Medium else FontWeight.Normal,
+                                    color = when {
+                                        isDone -> colors.accentWarm
+                                        isNext -> colors.accentWarm
+                                        else -> colors.textMuted
+                                    }
                                 )
                                 Text(
                                     text = p.format12hShort(strings.isArabic),
                                     fontFamily = appFont,
                                     fontSize = 12.sp,
                                     fontWeight = if (isNext) FontWeight.Medium else FontWeight.Light,
-                                    color = if (isNext) colors.textPrimary else colors.textSecondary
+                                    color = if (isNext || isDone) colors.textPrimary else colors.textSecondary
+                                )
+                                if (state.prayerTrackerEnabled) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isDone) colors.accentWarm else colors.background)
+                                            .border(
+                                                1.dp,
+                                                if (isDone) colors.accentWarm else colors.borderStrong,
+                                                CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isDone) {
+                                            Text(
+                                                text = "✓",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.background
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (state.prayerTrackerEnabled) {
+                        val progress = (completedPrayers.size / 5f).coerceIn(0f, 1f)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(colors.borderSubtle)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progress)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(50))
+                                        .background(colors.accentWarm)
                                 )
                             }
+                            Text(
+                                text = strings.prayerTrackerTapHint,
+                                fontFamily = appFont,
+                                fontSize = 10.sp,
+                                color = colors.textMuted
+                            )
                         }
                     }
                 }
@@ -279,12 +400,17 @@ fun HomeScreen(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                // Focus Pill
+                // Focus Pill (shows Manual Focus OR Auto-Focus at Prayer Times)
+                val effectiveFocus = state.focusMode || isPrayerAutoFocusActive
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .background(colors.surface)
-                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(50))
+                        .border(
+                            1.dp,
+                            if (isPrayerAutoFocusActive) colors.accentWarm else colors.borderSubtle,
+                            RoundedCornerShape(50)
+                        )
                         .clickable { onToggleFocus() }
                         .padding(horizontal = 11.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -294,13 +420,23 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(6.dp)
                             .clip(CircleShape)
-                            .background(if (state.focusMode) colors.accentFocus else colors.textMuted)
+                            .background(
+                                when {
+                                    isPrayerAutoFocusActive -> colors.accentWarm
+                                    state.focusMode -> colors.accentFocus
+                                    else -> colors.textMuted
+                                }
+                            )
                     )
                     Text(
-                        text = if (state.focusMode) strings.focusOn else strings.normalMode,
+                        text = when {
+                            isPrayerAutoFocusActive -> strings.prayerAutoFocusActivePill
+                            state.focusMode -> strings.focusOn
+                            else -> strings.normalMode
+                        },
                         fontFamily = appFont,
                         fontSize = 11.sp,
-                        color = if (state.focusMode) colors.textPrimary else colors.textSecondary
+                        color = if (effectiveFocus) colors.textPrimary else colors.textSecondary
                     )
                 }
 

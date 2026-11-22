@@ -39,6 +39,7 @@ class SukoonNotificationService : NotificationListenerService() {
     companion object {
         private const val PREFS_NAME = "sukoon_focus_prefs"
         private const val KEY_FOCUS_ACTIVE = "focus_mode_active"
+        private const val KEY_PRAYER_AUTO_FOCUS_UNTIL = "prayer_auto_focus_until"
         private const val STORE_FILE = "sukoon_captured_notifs_v1.json"
 
         private val ioExecutor = Executors.newSingleThreadExecutor()
@@ -56,6 +57,9 @@ class SukoonNotificationService : NotificationListenerService() {
         private val _isConnected = MutableStateFlow(false)
         val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
+        private val _prayerAutoFocusUntil = MutableStateFlow(0L)
+        val prayerAutoFocusUntil: StateFlow<Long> = _prayerAutoFocusUntil.asStateFlow()
+
         private val _captured = MutableStateFlow<List<CapturedNotification>>(emptyList())
         val captured: StateFlow<List<CapturedNotification>> = _captured.asStateFlow()
 
@@ -64,12 +68,55 @@ class SukoonNotificationService : NotificationListenerService() {
                 .edit()
                 .putBoolean(KEY_FOCUS_ACTIVE, enabled)
                 .apply()
-            activeService?.applyFocusFilter(enabled)
+            activeService?.applyFocusFilter(enabled || isPrayerAutoFocusActive(context))
         }
 
         fun isFocusModeFlagActive(context: Context): Boolean =
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getBoolean(KEY_FOCUS_ACTIVE, false)
+
+        fun getPrayerAutoFocusUntil(context: Context): Long =
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getLong(KEY_PRAYER_AUTO_FOCUS_UNTIL, 0L)
+
+        fun isPrayerAutoFocusActive(context: Context): Boolean {
+            val until = getPrayerAutoFocusUntil(context)
+            return until > System.currentTimeMillis()
+        }
+
+        fun isEffectiveFocusActive(context: Context): Boolean =
+            isFocusModeFlagActive(context) || isPrayerAutoFocusActive(context)
+
+        fun startPrayerAutoFocus(context: Context, durationMinutes: Int) {
+            val until = System.currentTimeMillis() + durationMinutes.coerceIn(5, 60) * 60_000L
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putLong(KEY_PRAYER_AUTO_FOCUS_UNTIL, until)
+                .apply()
+            _prayerAutoFocusUntil.value = until
+            activeService?.applyFocusFilter(true)
+        }
+
+        fun endPrayerAutoFocus(context: Context) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putLong(KEY_PRAYER_AUTO_FOCUS_UNTIL, 0L)
+                .apply()
+            _prayerAutoFocusUntil.value = 0L
+            activeService?.applyFocusFilter(isFocusModeFlagActive(context))
+        }
+
+        fun syncPrayerAutoFocusState(context: Context) {
+            val until = getPrayerAutoFocusUntil(context)
+            if (until > System.currentTimeMillis()) {
+                _prayerAutoFocusUntil.value = until
+                activeService?.applyFocusFilter(true)
+            } else if (until != 0L) {
+                endPrayerAutoFocus(context)
+            } else {
+                _prayerAutoFocusUntil.value = 0L
+            }
+        }
 
         fun isPermissionGranted(context: Context): Boolean {
             return try {
@@ -142,7 +189,8 @@ class SukoonNotificationService : NotificationListenerService() {
         activeService = this
         _isConnected.value = true
         loadPersisted(applicationContext)
-        if (isFocusModeFlagActive(applicationContext)) {
+        syncPrayerAutoFocusState(applicationContext)
+        if (isEffectiveFocusActive(applicationContext)) {
             applyFocusFilter(true)
         }
     }
@@ -167,7 +215,7 @@ class SukoonNotificationService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        if (!isFocusModeFlagActive(applicationContext)) return
+        if (!isEffectiveFocusActive(applicationContext)) return
 
         val pkg = sbn.packageName ?: return
         // Never intercept Sukoon's own notifications (e.g. prayer reminders) or core system UI

@@ -256,6 +256,7 @@ fun themeOptionFor(themeId: String, darkFallback: Boolean = true): AppThemeOptio
 val LocalSukoonColors = staticCompositionLocalOf { DarkSukoonColors }
 val LocalAppFont = staticCompositionLocalOf { IbmArabicFont }
 val LocalAppFontWeight = staticCompositionLocalOf { FontWeight.Normal }
+val LocalAnimationsEnabled = staticCompositionLocalOf { true }
 
 @Composable
 fun SukoonTheme(
@@ -264,6 +265,7 @@ fun SukoonTheme(
     appFontId: String = "ibm",
     appFontWeightId: String = "normal",
     appLanguage: String = "ar",
+    animationsEnabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val themeOpt = themeOptionFor(themeId, darkTheme)
@@ -274,7 +276,8 @@ fun SukoonTheme(
         LocalSukoonColors provides themeOpt.colors,
         LocalAppFont provides font,
         LocalAppFontWeight provides baseWeight,
-        LocalAppStrings provides strings
+        LocalAppStrings provides strings,
+        LocalAnimationsEnabled provides animationsEnabled
     ) {
         ProvideTextStyle(value = TextStyle(fontFamily = font, fontWeight = baseWeight)) {
             content()

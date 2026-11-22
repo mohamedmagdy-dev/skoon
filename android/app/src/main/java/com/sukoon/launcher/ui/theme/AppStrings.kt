@@ -216,6 +216,23 @@ interface AppStrings {
     val qiblaCalibrateHint: String
     val toastAdhanOnFmt: (String) -> String
     val toastAdhanOff: String
+    val prayerAutoFocusTitle: String
+    val prayerAutoFocusSub: String
+    val prayerAutoFocusDurationLabel: String
+    val prayerAutoFocusActivePill: String
+    val toastPrayerAutoFocusOnFmt: (String) -> String
+    val toastPrayerAutoFocusOff: String
+    val prayerTrackerTitle: String
+    val prayerTrackerSub: String
+    val prayersTrackedFmt: (String, String) -> String
+    val prayerTrackerTapHint: String
+    val mindfulTimeBoxTitle: String
+    val mindfulTimeBoxSub: String
+    val mindfulChooseDuration: String
+    val mindfulOpenWithoutTimer: String
+    val toastTimeBoxScheduledFmt: (String, String) -> String
+    val animationsTitle: String
+    val animationsSub: String
     val minutesShortFmt: (String) -> String
     val toastLocationUpdatedFmt: (String) -> String
     val toastLocationFailed: String
@@ -491,6 +508,23 @@ object ArabicStrings : AppStrings {
     override val qiblaCalibrateHint = "لأعلى دقة: حرّك الهاتف على شكل رقم ٨ في الهواء"
     override val toastAdhanOnFmt: (String) -> String = { name -> "تم تفعيل الأذان بصوت $name" }
     override val toastAdhanOff = "تم إيقاف صوت الأذان"
+    override val prayerAutoFocusTitle = "وضع السكينة التلقائي وقت الصلاة"
+    override val prayerAutoFocusSub = "تفعيل وضع التركيز وحجب الإشعارات تلقائياً عند كل صلاة ثم العودة للوضع الطبيعي"
+    override val prayerAutoFocusDurationLabel = "مدة السكينة عند الصلاة"
+    override val prayerAutoFocusActivePill = "سكينة الصلاة مفعّلة"
+    override val toastPrayerAutoFocusOnFmt: (String) -> String = { m -> "تم تفعيل سكينة الصلاة تلقائياً لمدة $m دقيقة" }
+    override val toastPrayerAutoFocusOff = "تم إيقاف سكينة الصلاة التلقائية"
+    override val prayerTrackerTitle = "متتبع الصلوات الخمس اليومي"
+    override val prayerTrackerSub = "اضغط على أي صلاة في الرئيسية لتعليمها ✓ مع نسبة إنجاز يومية هادئة"
+    override val prayersTrackedFmt: (String, String) -> String = { d, t -> "$d / $t ✓" }
+    override val prayerTrackerTapHint = "اضغط على أي صلاة لتعليمها ✓"
+    override val mindfulTimeBoxTitle = "سؤال المدة قبل فتح التطبيقات"
+    override val mindfulTimeBoxSub = "اختيار مدة الاستخدام (٥ / ١٠ / ١٥ د) مع تذكير هادئ عند انتهاء الوقت"
+    override val mindfulChooseDuration = "كم دقيقة تنوي قضاءها؟"
+    override val mindfulOpenWithoutTimer = "فتح بدون مؤقت"
+    override val toastTimeBoxScheduledFmt: (String, String) -> String = { m, app -> "سيتم تذكيرك بهدوء بعد $m دقائق في $app" }
+    override val animationsTitle = "السلاسة والرسوم المتحركة"
+    override val animationsSub = "حركات انتقال وفتح هادئة — أطفئها لتجربة فورية تماماً بدون حركة"
     override val minutesShortFmt: (String) -> String = { m -> "$m د" }
     override val toastLocationUpdatedFmt: (String) -> String = { loc -> "تم تحديد موقعك: $loc" }
     override val toastLocationFailed = "تعذر تحديد الموقع — تأكد من تفعيل GPS أو اختر مدينتك يدوياً"
@@ -765,6 +799,23 @@ object EnglishStrings : AppStrings {
     override val qiblaCalibrateHint = "For best accuracy, move your phone in a figure-8 motion"
     override val toastAdhanOnFmt: (String) -> String = { name -> "Adhan enabled ($name)" }
     override val toastAdhanOff = "Adhan disabled"
+    override val prayerAutoFocusTitle = "Auto-Focus at Prayer Times"
+    override val prayerAutoFocusSub = "Auto-enable Focus Mode & Notification Shield at each prayer, then restore automatically"
+    override val prayerAutoFocusDurationLabel = "Calm duration at prayer"
+    override val prayerAutoFocusActivePill = "Prayer Calm Active"
+    override val toastPrayerAutoFocusOnFmt: (String) -> String = { m -> "Prayer Auto-Focus enabled (${m}m)" }
+    override val toastPrayerAutoFocusOff = "Prayer Auto-Focus disabled"
+    override val prayerTrackerTitle = "Daily Prayer Tracker"
+    override val prayerTrackerSub = "Tap any prayer on Home to mark ✓ with a calm daily progress indicator"
+    override val prayersTrackedFmt: (String, String) -> String = { d, t -> "$d / $t ✓" }
+    override val prayerTrackerTapHint = "Tap any prayer to mark ✓"
+    override val mindfulTimeBoxTitle = "Time-Boxed Mindful Pause"
+    override val mindfulTimeBoxSub = "Choose intended duration (5 / 10 / 15m) with a gentle reminder when time is up"
+    override val mindfulChooseDuration = "How long do you intend to stay?"
+    override val mindfulOpenWithoutTimer = "Open without timer"
+    override val toastTimeBoxScheduledFmt: (String, String) -> String = { m, app -> "Gentle reminder set for ${m}m in $app" }
+    override val animationsTitle = "Smooth Animations & Motion"
+    override val animationsSub = "Gentle transitions & motion — turn off for instant zero-motion mode"
     override val minutesShortFmt: (String) -> String = { m -> "${m}m" }
     override val toastLocationUpdatedFmt: (String) -> String = { loc -> "Location set: $loc" }
     override val toastLocationFailed = "Could not detect location — enable GPS or pick manually"

@@ -26,6 +26,18 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,7 +54,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.absoluteValue
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -296,7 +310,8 @@ class MainActivity : ComponentActivity() {
                 darkTheme = state.darkTheme,
                 appFontId = state.appFontId,
                 appFontWeightId = state.appFontWeight,
-                appLanguage = state.appLanguage
+                appLanguage = state.appLanguage,
+                animationsEnabled = state.animationsEnabled
             ) {
                 CompositionLocalProvider(LocalLayoutDirection provides layoutDir) {
                     if (state.onboardingStatus != "completed") {
@@ -398,6 +413,9 @@ private fun SukoonLauncherRoot(
     val volumes by viewModel.volumes.collectAsState()
     val mindfulApp by viewModel.mindfulApp.collectAsState()
     val mindfulSecondsLeft by viewModel.mindfulSecondsLeft.collectAsState()
+    val prayerAutoFocusUntil by viewModel.prayerAutoFocusUntil.collectAsState()
+    val isPrayerAutoFocusActive = prayerAutoFocusUntil > System.currentTimeMillis()
+    val animOn = state.animationsEnabled
     val pomoTotal by viewModel.pomoTotalSeconds.collectAsState()
     val pomoSeconds by viewModel.pomoSeconds.collectAsState()
     val pomoModeKey by viewModel.pomoModeKey.collectAsState()
@@ -469,55 +487,78 @@ private fun SukoonLauncherRoot(
                     modifier = Modifier.weight(1f)
                 ) { pageIndex ->
                     val pageId = visiblePageIds.getOrNull(pageIndex) ?: "home"
-                    CompositionLocalProvider(LocalLayoutDirection provides pageLayoutDir) {
-                        when (pageId) {
-                            "home" -> {
-                                var dragAcc by remember { mutableFloatStateOf(0f) }
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .pointerInput(Unit) {
-                                            detectVerticalDragGestures(
-                                                onDragStart = { dragAcc = 0f },
-                                                onDragEnd = {
-                                                    if (dragAcc < -90f) showDrawer = true
-                                                    else if (dragAcc > 90f) showSearch = true
-                                                    dragAcc = 0f
-                                                },
-                                                onVerticalDrag = { _, dragAmount ->
-                                                    dragAcc += dragAmount
-                                                }
-                                            )
-                                        }
-                                ) {
-                                    val rightId = visiblePageIds.getOrNull(homeIdx + 1)
-                                    val leftId = visiblePageIds.getOrNull(homeIdx - 1)
-                                    HomeScreen(
-                                        state = state,
-                                        installedApps = installedApps,
-                                        rightTabLabel = rightId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
-                                        leftTabLabel = leftId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
-                                        onLoadAppIcon = { viewModel.loadAppIcon(it) },
-                                        onAppClick = { viewModel.onAppClick(it) },
-                                        onRemoveFavorite = { viewModel.toggleFavorite(it.packageName, it.label) },
-                                        onToggleFocus = { viewModel.toggleFocusMode() },
-                                        onOpenDrawer = { showDrawer = true },
-                                        onOpenSearch = { showSearch = true },
-                                        onOpenSettings = { showSettings = true },
-                                        onOpenQibla = { showQibla = true },
-                                        onNavigateRight = {
-                                            if (homeIdx + 1 < visiblePageIds.size) {
-                                                scope.launch { pagerState.animateScrollToPage(homeIdx + 1) }
-                                            }
-                                        },
-                                        onNavigateLeft = {
-                                            if (homeIdx - 1 >= 0) {
-                                                scope.launch { pagerState.animateScrollToPage(homeIdx - 1) }
-                                            }
-                                        }
-                                    )
-                                }
+                    val pageOffset = ((pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction).absoluteValue
+                    val pageModifier = if (animOn) {
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val fraction = 1f - pageOffset.coerceIn(0f, 1f)
+                                alpha = 0.72f + 0.28f * fraction
+                                val s = 0.965f + 0.035f * fraction
+                                scaleX = s
+                                scaleY = s
                             }
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
+                    Box(modifier = pageModifier) {
+                        CompositionLocalProvider(LocalLayoutDirection provides pageLayoutDir) {
+                            when (pageId) {
+                                "home" -> {
+                                    var dragAcc by remember { mutableFloatStateOf(0f) }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .pointerInput(Unit) {
+                                                detectVerticalDragGestures(
+                                                    onDragStart = { dragAcc = 0f },
+                                                    onDragEnd = {
+                                                        if (dragAcc < -90f) showDrawer = true
+                                                        else if (dragAcc > 90f) showSearch = true
+                                                        dragAcc = 0f
+                                                    },
+                                                    onVerticalDrag = { _, dragAmount ->
+                                                        dragAcc += dragAmount
+                                                    }
+                                                )
+                                            }
+                                    ) {
+                                        val rightId = visiblePageIds.getOrNull(homeIdx + 1)
+                                        val leftId = visiblePageIds.getOrNull(homeIdx - 1)
+                                        HomeScreen(
+                                            state = state,
+                                            installedApps = installedApps,
+                                            rightTabLabel = rightId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
+                                            leftTabLabel = leftId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
+                                            onLoadAppIcon = { viewModel.loadAppIcon(it) },
+                                            onAppClick = { viewModel.onAppClick(it) },
+                                            onRemoveFavorite = { viewModel.toggleFavorite(it.packageName, it.label) },
+                                            onToggleFocus = { viewModel.toggleFocusMode() },
+                                            onOpenDrawer = { showDrawer = true },
+                                            onOpenSearch = { showSearch = true },
+                                            onOpenSettings = { showSettings = true },
+                                            onOpenQibla = { showQibla = true },
+                                            isPrayerAutoFocusActive = isPrayerAutoFocusActive,
+                                            onTogglePrayerCompleted = { viewModel.togglePrayerCompleted(it) },
+                                            onNavigateRight = {
+                                                if (homeIdx + 1 < visiblePageIds.size) {
+                                                    scope.launch {
+                                                        if (animOn) pagerState.animateScrollToPage(homeIdx + 1)
+                                                        else pagerState.scrollToPage(homeIdx + 1)
+                                                    }
+                                                }
+                                            },
+                                            onNavigateLeft = {
+                                                if (homeIdx - 1 >= 0) {
+                                                    scope.launch {
+                                                        if (animOn) pagerState.animateScrollToPage(homeIdx - 1)
+                                                        else pagerState.scrollToPage(homeIdx - 1)
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
 
                             "quran" -> QuranScreen(
                                 state = state,
@@ -590,6 +631,7 @@ private fun SukoonLauncherRoot(
                                 onAutoFocusChange = { viewModel.setPomoAutoFocus(it) }
                             )
                         }
+                        }
                     }
                 }
             }
@@ -605,27 +647,47 @@ private fun SukoonLauncherRoot(
                 ) {
                     visiblePageIds.forEachIndexed { idx, id ->
                         val active = idx == pagerState.currentPage
-                        val dotColor = when {
+                        val targetColor = when {
                             active && (id == "quran" || id == "azkar" || id == "dhikr") -> colors.accentWarm
                             active -> colors.textPrimary
                             else -> colors.borderStrong
                         }
+                        val dotColor by animateColorAsState(
+                            targetValue = targetColor,
+                            animationSpec = tween(if (animOn) 200 else 0),
+                            label = "dotColor"
+                        )
+                        val dotWidth by animateDpAsState(
+                            targetValue = if (active) 18.dp else 6.dp,
+                            animationSpec = tween(if (animOn) 220 else 0),
+                            label = "dotWidth"
+                        )
                         Box(
                             modifier = Modifier
                                 .padding(horizontal = 4.dp)
                                 .height(6.dp)
-                                .width(if (active) 18.dp else 6.dp)
+                                .width(dotWidth)
                                 .clip(RoundedCornerShape(50))
                                 .background(dotColor)
-                                .clickable { scope.launch { pagerState.animateScrollToPage(idx) } }
+                                .clickable {
+                                    scope.launch {
+                                        if (animOn) pagerState.animateScrollToPage(idx)
+                                        else pagerState.scrollToPage(idx)
+                                    }
+                                }
                         )
                     }
                 }
             }
         }
 
-        // Overlays
-        if (showDrawer) {
+        // Overlays (smooth animated transitions when animationsEnabled == true, instant when false)
+        val sheetEnter = if (animOn) fadeIn(tween(190)) + slideInVertically(tween(240)) { it / 14 } else EnterTransition.None
+        val sheetExit = if (animOn) fadeOut(tween(150)) + slideOutVertically(tween(180)) { it / 18 } else ExitTransition.None
+        val modalEnter = if (animOn) fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.96f) else EnterTransition.None
+        val modalExit = if (animOn) fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.97f) else ExitTransition.None
+
+        AnimatedVisibility(visible = showDrawer, enter = sheetEnter, exit = sheetExit) {
             AppDrawerOverlay(
                 state = state,
                 installedApps = installedApps,
@@ -637,7 +699,7 @@ private fun SukoonLauncherRoot(
             )
         }
 
-        if (showSearch) {
+        AnimatedVisibility(visible = showSearch, enter = modalEnter, exit = modalExit) {
             UniversalSearchOverlay(
                 state = state,
                 installedApps = installedApps,
@@ -648,14 +710,19 @@ private fun SukoonLauncherRoot(
                 onAppClick = { viewModel.onAppClick(it) },
                 onNavigateToPage = { id ->
                     val idx = visiblePageIds.indexOf(id)
-                    if (idx != -1) scope.launch { pagerState.animateScrollToPage(idx) }
+                    if (idx != -1) {
+                        scope.launch {
+                            if (animOn) pagerState.animateScrollToPage(idx)
+                            else pagerState.scrollToPage(idx)
+                        }
+                    }
                 },
                 onOpenSettings = { showSettings = true },
                 onClose = { showSearch = false }
             )
         }
 
-        if (showSettings) {
+        AnimatedVisibility(visible = showSettings, enter = sheetEnter, exit = sheetExit) {
             SettingsOverlay(
                 state = state,
                 volumes = volumes,
@@ -675,13 +742,18 @@ private fun SukoonLauncherRoot(
                 onToggleAdhan = onToggleAdhan,
                 onSetAdhanMuezzin = { viewModel.setAdhanMuezzin(it) },
                 onToggleMuezzinPreview = { viewModel.toggleMuezzinPreview(it) },
+                onTogglePrayerAutoFocus = { viewModel.setPrayerAutoFocusEnabled(it) },
+                onSetPrayerAutoFocusMinutes = { viewModel.setPrayerAutoFocusMinutes(it) },
+                onTogglePrayerTracker = { viewModel.setPrayerTrackerEnabled(it) },
                 onOpenQibla = { showQibla = true },
                 onSetQuranLineHeight = { viewModel.setQuranLineHeight(it) },
                 onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
                 onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
                 onSetDarkTheme = { viewModel.setDarkTheme(it) },
+                onToggleAnimations = { viewModel.setAnimationsEnabled(it) },
                 onToggleFocus = { viewModel.toggleFocusMode(it) },
                 onSetMindfulDuration = { viewModel.setMindfulPauseSeconds(it) },
+                onToggleMindfulTimeBox = { viewModel.setMindfulTimeBoxEnabled(it) },
                 onSetHaptics = { viewModel.setHapticsEnabled(it) },
                 onRefreshVolumes = { viewModel.refreshVolumes() },
                 onSetVolume = { s, v -> viewModel.setStreamVolume(s, v) },
@@ -698,7 +770,7 @@ private fun SukoonLauncherRoot(
             )
         }
 
-        if (showQibla) {
+        AnimatedVisibility(visible = showQibla, enter = modalEnter, exit = modalExit) {
             QiblaOverlay(
                 state = state,
                 onAlignedHaptic = { viewModel.vibrateLight() },
@@ -706,16 +778,19 @@ private fun SukoonLauncherRoot(
             )
         }
 
-        mindfulApp?.let { app ->
-            MindfulPauseOverlay(
-                app = app,
-                secondsLeft = mindfulSecondsLeft,
-                onStay = {
-                    viewModel.dismissMindfulPause()
-                    viewModel.showToast(strings.toastStayedCalm)
-                },
-                onProceed = { viewModel.proceedMindfulApp() }
-            )
+        AnimatedVisibility(visible = mindfulApp != null, enter = modalEnter, exit = modalExit) {
+            mindfulApp?.let { app ->
+                MindfulPauseOverlay(
+                    app = app,
+                    secondsLeft = mindfulSecondsLeft,
+                    timeBoxEnabled = state.mindfulTimeBoxEnabled,
+                    onStay = {
+                        viewModel.dismissMindfulPause()
+                        viewModel.showToast(strings.toastStayedCalm)
+                    },
+                    onProceed = { mins -> viewModel.proceedMindfulApp(mins) }
+                )
+            }
         }
 
         // Pure-Black "Screen-Off" Tasbih / Azkar Overlay
@@ -774,13 +849,18 @@ private fun SukoonLauncherRoot(
         }
 
         // Subtle Toast
-        if (blackScreenMode == null) {
+        AnimatedVisibility(
+            visible = blackScreenMode == null && toastMsg != null,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 36.dp),
+            enter = if (animOn) fadeIn(tween(180)) + slideInVertically(tween(200)) { it / 2 } else EnterTransition.None,
+            exit = if (animOn) fadeOut(tween(150)) + slideOutVertically(tween(150)) { it / 2 } else ExitTransition.None
+        ) {
             toastMsg?.let { msg ->
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 36.dp)
                         .clip(RoundedCornerShape(50))
                         .background(colors.textPrimary)
                         .padding(horizontal = 18.dp, vertical = 9.dp)
