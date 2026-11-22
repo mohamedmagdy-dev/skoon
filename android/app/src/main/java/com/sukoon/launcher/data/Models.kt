@@ -36,11 +36,22 @@ data class NoteItem(
 
 @Serializable
 data class LauncherState(
+    val onboardingStatus: String = "not_started", // "not_started" | "in_progress" | "completed"
+    val onboardingStep: Int = 0,
     val darkTheme: Boolean = true,
     val appLanguage: String = "ar", // "ar" | "en"
     val appFontId: String = "ibm", // "ibm" | "tajawal" | "almarai" | "amiri" | "system"
+    val appDisplayStyle: String = "text", // "text" | "monochrome" | "original"
     val prayerCityId: String = "alexandria",
+    val useGpsLocation: Boolean = false,
+    val customLat: Double? = null,
+    val customLng: Double? = null,
+    val customLocationLabel: String = "",
+    val prayerReminderEnabled: Boolean = false,
+    val prayerReminderMinutesBefore: Int = 10,
     val focusMode: Boolean = false,
+    val mindfulPauseSeconds: Int = 5,
+    val hapticsEnabled: Boolean = true,
     val pageConfig: List<PageConfig> = defaultPageConfig(),
     val favoritePackages: List<String> = emptyList(),
     val distractingPackages: List<String> = defaultDistractingPackages(),
@@ -104,6 +115,7 @@ val PAGE_META_MAP = mapOf(
     "pomodoro" to PageMeta("pomodoro", "البومودورو", "بومودورو", "Pomodoro", "Pomodoro"),
     "notes" to PageMeta("notes", "الملاحظات", "الملاحظات", "Notes", "Notes"),
     "habits" to PageMeta("habits", "المهام اليومية", "المهام", "Daily Habits", "Habits"),
+    "notifications" to PageMeta("notifications", "إشعارات التركيز", "الإشعارات", "Focus Inbox", "Inbox"),
     "home" to PageMeta("home", "الشاشة الرئيسية", "الرئيسية", "Home Screen", "Home", required = true),
     "quran" to PageMeta("quran", "الورد القرآني", "الورد", "Quran", "Quran"),
     "azkar" to PageMeta("azkar", "أذكار الصباح والمساء", "الأذكار", "Morning & Evening Azkar", "Azkar"),
@@ -114,6 +126,7 @@ fun defaultPageConfig(): List<PageConfig> = listOf(
     PageConfig("pomodoro", true),
     PageConfig("notes", true),
     PageConfig("habits", true),
+    PageConfig("notifications", true),
     PageConfig("home", true),
     PageConfig("quran", true),
     PageConfig("azkar", true),

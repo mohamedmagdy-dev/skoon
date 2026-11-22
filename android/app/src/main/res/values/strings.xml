@@ -3,4 +3,5 @@
     <string name="app_name">سكون</string>
     <string name="accessibility_service_label">سكون — التسبيح بالبصمة</string>
     <string name="accessibility_service_desc">يسمح لتطبيق سكون بالتقاط حركة الإصبع على حساس البصمة الخلفية للعد في تابة الأذكار والمسبحة.</string>
+    <string name="notification_service_label">سكون — إخفاء إشعارات وضع التركيز</string>
 </resources>

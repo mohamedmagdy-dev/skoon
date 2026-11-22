@@ -1,10 +1,18 @@
 package com.sukoon.launcher
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
+import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -12,7 +20,12 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.Locale
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +65,144 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private val viewModel: SukoonViewModel by viewModels()
+
+    private val isLocatingState = mutableStateOf(false)
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            fetchCurrentLocation()
+        } else {
+            isLocatingState.value = false
+            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+        }
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.setPrayerReminderEnabled(true)
+        } else {
+            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastNotifPermissionDenied)
+        }
+    }
+
+    private fun requestUserLocation() {
+        val hasFine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (hasFine || hasCoarse) {
+            fetchCurrentLocation()
+        } else {
+            isLocatingState.value = true
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
+        }
+    }
+
+    private fun togglePrayerReminderWithPermission(enable: Boolean) {
+        if (!enable) {
+            viewModel.setPrayerReminderEnabled(false)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        viewModel.setPrayerReminderEnabled(true)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun fetchCurrentLocation() {
+        isLocatingState.value = true
+        val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        if (lm == null) {
+            isLocatingState.value = false
+            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+            return
+        }
+
+        // Try best last known location first for instant response
+        val providers = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        )
+        var best: Location? = null
+        for (p in providers) {
+            try {
+                val loc = lm.getLastKnownLocation(p)
+                if (loc != null && (best == null || loc.accuracy < best.accuracy)) {
+                    best = loc
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        if (best != null) {
+            resolveAndApplyLocation(best.latitude, best.longitude)
+            return
+        }
+
+        // Request fresh single location fix if no cached fix exists
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val activeProvider = when {
+                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                else -> null
+            }
+            if (activeProvider != null) {
+                try {
+                    lm.getCurrentLocation(
+                        activeProvider,
+                        CancellationSignal(),
+                        mainExecutor
+                    ) { loc ->
+                        if (loc != null) {
+                            resolveAndApplyLocation(loc.latitude, loc.longitude)
+                        } else {
+                            isLocatingState.value = false
+                            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+                        }
+                    }
+                    return
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        isLocatingState.value = false
+        viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+    }
+
+    private fun resolveAndApplyLocation(lat: Double, lng: Double) {
+        lifecycleScope.launch {
+            val isAr = viewModel.state.value.appLanguage != "en"
+            val label = withContext(Dispatchers.IO) {
+                try {
+                    @Suppress("DEPRECATION")
+                    val list = Geocoder(this@MainActivity, if (isAr) Locale("ar") else Locale.ENGLISH)
+                        .getFromLocation(lat, lng, 1)
+                    val addr = list?.firstOrNull()
+                    addr?.locality ?: addr?.subAdminArea ?: addr?.adminArea ?: ""
+                } catch (_: Exception) {
+                    ""
+                }
+            }
+            isLocatingState.value = false
+            viewModel.setGpsLocation(lat, lng, label)
+        }
+    }
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -122,24 +273,51 @@ class MainActivity : ComponentActivity() {
                 appLanguage = state.appLanguage
             ) {
                 CompositionLocalProvider(LocalLayoutDirection provides layoutDir) {
-                    SukoonLauncherRoot(
-                        viewModel = viewModel,
-                        onSetBlackScreenWindow = { enabled -> setBlackScreenMode(enabled) },
-                        onOpenAccessibility = {
-                            try {
-                                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                            } catch (_: Exception) {
-                                viewModel.showToast(stringsFor(state.appLanguage).toastAccessibilityFallback)
+                    if (state.onboardingStatus != "completed") {
+                        OnboardingScreen(
+                            state = state,
+                            isLocating = isLocatingState.value,
+                            onSetStep = { viewModel.setOnboardingStep(it) },
+                            onSetLanguage = { viewModel.setAppLanguage(it) },
+                            onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
+                            onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
+                            onSetDarkTheme = { viewModel.setDarkTheme(it) },
+                            onSetAppFont = { viewModel.setAppFont(it) },
+                            onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
+                            onSetPrayerCity = { viewModel.setPrayerCity(it) },
+                            onRequestLocation = { requestUserLocation() },
+                            onComplete = { viewModel.completeOnboarding() }
+                        )
+                    } else {
+                        SukoonLauncherRoot(
+                            viewModel = viewModel,
+                            isLocating = isLocatingState.value,
+                            onRequestLocation = { requestUserLocation() },
+                            onTogglePrayerReminder = { togglePrayerReminderWithPermission(it) },
+                            onSetBlackScreenWindow = { enabled -> setBlackScreenMode(enabled) },
+                            onOpenNotificationAccess = {
+                                try {
+                                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                                } catch (_: Exception) {
+                                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                                }
+                            },
+                            onOpenAccessibility = {
+                                try {
+                                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                } catch (_: Exception) {
+                                    viewModel.showToast(stringsFor(state.appLanguage).toastAccessibilityFallback)
+                                }
+                            },
+                            onOpenDefaultHome = {
+                                try {
+                                    startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+                                } catch (_: Exception) {
+                                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                                }
                             }
-                        },
-                        onOpenDefaultHome = {
-                            try {
-                                startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-                            } catch (_: Exception) {
-                                startActivity(Intent(Settings.ACTION_SETTINGS))
-                            }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -149,6 +327,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         viewModel.refreshApps()
         viewModel.refreshVolumes()
+        viewModel.refreshNotificationAccess()
+        viewModel.syncPrayerReminderSchedule()
     }
 
     override fun onPause() {
@@ -169,7 +349,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SukoonLauncherRoot(
     viewModel: SukoonViewModel,
+    isLocating: Boolean,
+    onRequestLocation: () -> Unit,
+    onTogglePrayerReminder: (Boolean) -> Unit,
     onSetBlackScreenWindow: (Boolean) -> Unit,
+    onOpenNotificationAccess: () -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenDefaultHome: () -> Unit
 ) {
@@ -188,6 +372,8 @@ private fun SukoonLauncherRoot(
     val pomoModeKey by viewModel.pomoModeKey.collectAsState()
     val pomoRunning by viewModel.pomoRunning.collectAsState()
     val isAccConnected by viewModel.isAccessibilityConnected.collectAsState()
+    val capturedNotifications by viewModel.capturedNotifications.collectAsState()
+    val isNotifAccessGranted by viewModel.isNotificationAccessGranted.collectAsState()
     val pageLayoutDir = if (strings.isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     var showDrawer by remember { mutableStateOf(false) }
@@ -274,6 +460,7 @@ private fun SukoonLauncherRoot(
                                         installedApps = installedApps,
                                         rightTabLabel = rightId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
                                         leftTabLabel = leftId?.let { PAGE_META_MAP[it]?.localizedShort(strings.isArabic) },
+                                        onLoadAppIcon = { viewModel.loadAppIcon(it) },
                                         onAppClick = { viewModel.onAppClick(it) },
                                         onRemoveFavorite = { viewModel.toggleFavorite(it.packageName, it.label) },
                                         onToggleFocus = { viewModel.toggleFocusMode() },
@@ -330,6 +517,18 @@ private fun SukoonLauncherRoot(
                                 onAddHabit = { viewModel.addHabit(it) },
                                 onDeleteHabit = { viewModel.deleteHabit(it) },
                                 onNewDay = { viewModel.resetHabitsNewDay() }
+                            )
+
+                            "notifications" -> NotificationsScreen(
+                                state = state,
+                                notifications = capturedNotifications,
+                                isNotificationAccessGranted = isNotifAccessGranted,
+                                onLoadAppIcon = { viewModel.loadAppIcon(it) },
+                                onOpenNotificationAccessSettings = onOpenNotificationAccess,
+                                onToggleFocus = { viewModel.toggleFocusMode() },
+                                onOpenNotificationApp = { viewModel.openCapturedNotificationApp(it) },
+                                onDismissNotification = { viewModel.dismissCapturedNotification(it) },
+                                onClearAll = { viewModel.clearCapturedNotifications() }
                             )
 
                             "notes" -> NotesScreen(
@@ -392,6 +591,7 @@ private fun SukoonLauncherRoot(
             AppDrawerOverlay(
                 state = state,
                 installedApps = installedApps,
+                onLoadAppIcon = { viewModel.loadAppIcon(it) },
                 onAppClick = { viewModel.onAppClick(it) },
                 onToggleFavorite = { viewModel.toggleFavorite(it.packageName, it.label) },
                 onToggleDistracting = { viewModel.toggleDistracting(it.packageName, it.label) },
@@ -422,18 +622,30 @@ private fun SukoonLauncherRoot(
                 state = state,
                 volumes = volumes,
                 isAccessibilityConnected = isAccConnected,
+                isNotificationAccessGranted = isNotifAccessGranted,
+                isLocating = isLocating,
                 onSetLanguage = { viewModel.setAppLanguage(it) },
                 onSetAppFont = { viewModel.setAppFont(it) },
+                onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
                 onSetPrayerCity = { viewModel.setPrayerCity(it) },
+                onRequestLocation = onRequestLocation,
+                onTogglePrayerReminder = onTogglePrayerReminder,
+                onSetPrayerReminderMinutes = { viewModel.setPrayerReminderMinutes(it) },
                 onSetQuranLineHeight = { viewModel.setQuranLineHeight(it) },
                 onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
                 onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
                 onSetDarkTheme = { viewModel.setDarkTheme(it) },
+                onToggleFocus = { viewModel.toggleFocusMode(it) },
+                onSetMindfulDuration = { viewModel.setMindfulPauseSeconds(it) },
+                onSetHaptics = { viewModel.setHapticsEnabled(it) },
                 onRefreshVolumes = { viewModel.refreshVolumes() },
                 onSetVolume = { s, v -> viewModel.setStreamVolume(s, v) },
                 onToggleMute = { viewModel.toggleMuteAll() },
+                onOpenNotificationAccessSettings = onOpenNotificationAccess,
                 onOpenAccessibilitySettings = onOpenAccessibility,
                 onOpenDefaultLauncherSettings = onOpenDefaultHome,
+                onRestartSetup = { viewModel.restartSetup() },
+                onResetApp = { viewModel.resetApp() },
                 onClose = { showSettings = false }
             )
         }

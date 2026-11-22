@@ -164,6 +164,43 @@ object PrayerTimesCalculator {
     fun findCity(cityId: String): PrayerCity =
         PRAYER_CITIES.firstOrNull { it.id == cityId } ?: PRAYER_CITIES.first()
 
+    fun findNearestCity(lat: Double, lng: Double): PrayerCity {
+        var best = PRAYER_CITIES.first()
+        var bestDist = Double.MAX_VALUE
+        for (c in PRAYER_CITIES) {
+            val dLat = c.lat - lat
+            val dLng = c.lng - lng
+            val d = dLat * dLat + dLng * dLng
+            if (d < bestDist) {
+                bestDist = d
+                best = c
+            }
+        }
+        return best
+    }
+
+    fun resolveCityForState(state: LauncherState): PrayerCity {
+        val lat = state.customLat
+        val lng = state.customLng
+        if (state.useGpsLocation && lat != null && lng != null) {
+            val nearest = findNearestCity(lat, lng)
+            val label = state.customLocationLabel.ifBlank { nearest.nameAr }
+            return nearest.copy(
+                id = "gps",
+                nameAr = label,
+                nameEn = state.customLocationLabel.ifBlank { nearest.nameEn },
+                lat = lat,
+                lng = lng
+            )
+        }
+        return findCity(state.prayerCityId)
+    }
+
+    fun getNextPrayerForState(
+        state: LauncherState,
+        nowMillis: Long = System.currentTimeMillis()
+    ): NextPrayerInfo = getNextPrayer(resolveCityForState(state), nowMillis)
+
     fun getNextPrayer(
         cityId: String,
         nowMillis: Long = System.currentTimeMillis()

@@ -7,10 +7,14 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sukoon.launcher.data.*
+import com.sukoon.launcher.service.CapturedNotification
+import com.sukoon.launcher.service.PrayerReminderScheduler
 import com.sukoon.launcher.service.SukoonAccessibilityService
+import com.sukoon.launcher.service.SukoonNotificationService
 import com.sukoon.launcher.ui.theme.fontOptionFor
 import com.sukoon.launcher.ui.theme.stringsFor
 import kotlinx.coroutines.Dispatchers
@@ -90,9 +94,16 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     val isAccessibilityConnected = SukoonAccessibilityService.isServiceConnected
     val isFingerprintGestureAvailable = SukoonAccessibilityService.isFingerprintGestureAvailable
 
+    // Focus Mode Notification Shield
+    val capturedNotifications = SukoonNotificationService.captured
+    private val _isNotificationAccessGranted = MutableStateFlow(SukoonNotificationService.isPermissionGranted(app))
+    val isNotificationAccessGranted: StateFlow<Boolean> = _isNotificationAccessGranted.asStateFlow()
+
     private var toastJob: Job? = null
 
     init {
+        SukoonNotificationService.setFocusModeFlag(app, _state.value.focusMode)
+        SukoonNotificationService.loadPersisted(app)
         refreshApps()
         viewModelScope.launch {
             _quranPages.value = repo.loadQuranPages()
@@ -141,6 +152,7 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun vibrateLight() {
+        if (!_state.value.hapticsEnabled) return
         val vib = vibrator ?: return
         if (!vib.hasVibrator()) return
         try {
@@ -155,6 +167,7 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun vibrateSuccess() {
+        if (!_state.value.hapticsEnabled) return
         val vib = vibrator ?: return
         if (!vib.hasVibrator()) return
         try {
@@ -167,6 +180,8 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
         } catch (_: Exception) {
         }
     }
+
+    suspend fun loadAppIcon(packageName: String): ImageBitmap? = repo.loadAppIcon(packageName)
 
     // ===== Apps =====
     fun refreshApps() {
@@ -207,10 +222,11 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun startMindfulPause(app: AppInfo) {
         mindfulJob?.cancel()
+        val duration = _state.value.mindfulPauseSeconds.coerceIn(3, 15)
         _mindfulApp.value = app
-        _mindfulSecondsLeft.value = 5
+        _mindfulSecondsLeft.value = duration
         mindfulJob = viewModelScope.launch {
-            for (sec in 4 downTo 0) {
+            for (sec in (duration - 1) downTo 0) {
                 delay(1000)
                 _mindfulSecondsLeft.value = sec
             }
@@ -248,8 +264,57 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setPrayerCity(cityId: String) {
         val city = PrayerTimesCalculator.findCity(cityId)
-        updateState { it.copy(prayerCityId = city.id) }
+        updateState {
+            it.copy(
+                prayerCityId = city.id,
+                useGpsLocation = false
+            )
+        }
+        PrayerReminderScheduler.scheduleNext(getApplication(), _state.value)
         showToast(strings.toastCityUpdatedFmt(city.localizedName(strings.isArabic)))
+    }
+
+    fun setGpsLocation(lat: Double, lng: Double, label: String) {
+        val nearest = PrayerTimesCalculator.findNearestCity(lat, lng)
+        val cleanLabel = label.trim().ifEmpty { nearest.localizedName(strings.isArabic) }
+        updateState {
+            it.copy(
+                prayerCityId = nearest.id,
+                useGpsLocation = true,
+                customLat = lat,
+                customLng = lng,
+                customLocationLabel = cleanLabel
+            )
+        }
+        PrayerReminderScheduler.scheduleNext(getApplication(), _state.value)
+        showToast(strings.toastLocationUpdatedFmt(cleanLabel))
+    }
+
+    fun setPrayerReminderEnabled(enabled: Boolean) {
+        updateState { it.copy(prayerReminderEnabled = enabled) }
+        val cur = _state.value
+        PrayerReminderScheduler.scheduleNext(getApplication(), cur)
+        showToast(
+            if (enabled) strings.toastReminderOnFmt(cur.prayerReminderMinutesBefore.formatDigits(strings.isArabic))
+            else strings.toastReminderOff
+        )
+    }
+
+    fun setPrayerReminderMinutes(minutes: Int) {
+        val clamped = minutes.coerceIn(5, 60)
+        updateState { it.copy(prayerReminderMinutesBefore = clamped) }
+        val cur = _state.value
+        if (cur.prayerReminderEnabled) {
+            PrayerReminderScheduler.scheduleNext(getApplication(), cur)
+            showToast(strings.toastReminderOnFmt(clamped.formatDigits(strings.isArabic)))
+        }
+    }
+
+    fun syncPrayerReminderSchedule() {
+        val cur = _state.value
+        if (cur.prayerReminderEnabled) {
+            PrayerReminderScheduler.scheduleNext(getApplication(), cur)
+        }
     }
 
     fun setQuranLineHeight(multiplier: Float) {
@@ -257,10 +322,72 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
         updateState { it.copy(quranLineHeightMultiplier = clamped) }
     }
 
+    fun setAppDisplayStyle(style: String) {
+        val normalized = when (style) {
+            "monochrome", "original" -> style
+            else -> "text"
+        }
+        updateState { it.copy(appDisplayStyle = normalized) }
+    }
+
+    fun setMindfulPauseSeconds(seconds: Int) {
+        updateState { it.copy(mindfulPauseSeconds = seconds.coerceIn(3, 15)) }
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        updateState { it.copy(hapticsEnabled = enabled) }
+    }
+
+    // ===== Onboarding & Reset =====
+    fun setOnboardingStep(step: Int) {
+        updateState { s ->
+            s.copy(
+                onboardingStep = step.coerceIn(0, 7),
+                onboardingStatus = if (s.onboardingStatus == "not_started" && step > 0) "in_progress" else s.onboardingStatus
+            )
+        }
+    }
+
+    fun completeOnboarding() {
+        updateState { it.copy(onboardingStatus = "completed", onboardingStep = 0) }
+    }
+
+    fun restartSetup() {
+        updateState { it.copy(onboardingStatus = "in_progress", onboardingStep = 1) }
+    }
+
+    fun resetApp() {
+        val apps = _installedApps.value
+        val fresh = LauncherState(
+            favoritePackages = if (apps.isNotEmpty()) repo.pickInitialFavorites(apps) else emptyList()
+        )
+        _state.value = fresh
+        flushPendingSave()
+    }
+
     fun toggleFocusMode(force: Boolean? = null) {
         val target = force ?: !_state.value.focusMode
         updateState { it.copy(focusMode = target) }
+        SukoonNotificationService.setFocusModeFlag(getApplication(), target)
         showToast(if (target) strings.toastFocusEnabled else strings.toastFocusDisabled)
+    }
+
+    fun refreshNotificationAccess() {
+        _isNotificationAccessGranted.value = SukoonNotificationService.isPermissionGranted(getApplication())
+        SukoonNotificationService.setFocusModeFlag(getApplication(), _state.value.focusMode)
+    }
+
+    fun dismissCapturedNotification(id: String) {
+        SukoonNotificationService.removeItem(getApplication(), id)
+    }
+
+    fun clearCapturedNotifications() {
+        SukoonNotificationService.clearAll(getApplication())
+    }
+
+    fun openCapturedNotificationApp(item: CapturedNotification) {
+        SukoonNotificationService.removeItem(getApplication(), item.id)
+        repo.launchApp(item.packageName)
     }
 
     // ===== Page Ordering =====

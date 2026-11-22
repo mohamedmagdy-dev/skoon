@@ -78,40 +78,40 @@ data class SukoonColors(
 
 val DarkSukoonColors = SukoonColors(
     background = Color(0xFF09090B),
-    surface = Color(0x0AFFFFFF),
-    surfaceHover = Color(0x14FFFFFF),
-    borderSubtle = Color(0x15FFFFFF),
-    borderStrong = Color(0x2BFFFFFF),
-    textPrimary = Color(0xFFF5F5F7),
-    textSecondary = Color(0xFF9898A0),
-    textMuted = Color(0xFF5E5E66),
+    surface = Color(0xFF121214),
+    surfaceHover = Color(0xFF1A1A1D),
+    borderSubtle = Color(0xFF29292C),
+    borderStrong = Color(0xFF3A3A40),
+    textPrimary = Color(0xFFF4F0E8),
+    textSecondary = Color(0xFFA19D95),
+    textMuted = Color(0xFF6C6862),
     accentWarm = Color(0xFFD9B88C),
-    accentWarmSoft = Color(0x24D9B88C),
-    accentFocus = Color(0xFF86EFAC),
-    dangerSoft = Color(0xFFF87171),
-    mushafBg = Color(0xFF0F0E0C),
+    accentWarmSoft = Color(0x21D9B88C),
+    accentFocus = Color(0xFF78947C),
+    dangerSoft = Color(0xFFCF7770),
+    mushafBg = Color(0xFF0E0D0B),
     mushafText = Color(0xFFEEE7D8),
     mushafBorder = Color(0x38D9B88C),
-    overlayBg = Color(0xF509090B)
+    overlayBg = Color(0xFF09090B)
 )
 
 val LightSukoonColors = SukoonColors(
     background = Color(0xFFF7F5F0),
-    surface = Color(0x0B18181B),
-    surfaceHover = Color(0x1518181B),
-    borderSubtle = Color(0x1718181B),
-    borderStrong = Color(0x3318181B),
-    textPrimary = Color(0xFF141416),
-    textSecondary = Color(0xFF5C5C63),
-    textMuted = Color(0xFF8B8B93),
+    surface = Color(0xFFFFFFFF),
+    surfaceHover = Color(0xFFEEEAE2),
+    borderSubtle = Color(0xFFE4DFD6),
+    borderStrong = Color(0xFFCFC7BA),
+    textPrimary = Color(0xFF242321),
+    textSecondary = Color(0xFF77736D),
+    textMuted = Color(0xFF9B968E),
     accentWarm = Color(0xFF9A6B36),
     accentWarmSoft = Color(0x1F9A6B36),
-    accentFocus = Color(0xFF15803D),
-    dangerSoft = Color(0xFFDC2626),
+    accentFocus = Color(0xFF547A5A),
+    dangerSoft = Color(0xFFAD514B),
     mushafBg = Color(0xFFFBF8F1),
     mushafText = Color(0xFF1C1915),
     mushafBorder = Color(0x479A6B36),
-    overlayBg = Color(0xF7F7F5F0)
+    overlayBg = Color(0xFFF7F5F0)
 )
 
 val LocalSukoonColors = staticCompositionLocalOf { DarkSukoonColors }

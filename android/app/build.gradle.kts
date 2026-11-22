@@ -20,8 +20,8 @@ android {
         applicationId = "com.sukoon.launcher"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 6
+        versionName = "2.2.1"
     }
 
     signingConfigs {

@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +38,7 @@ fun HomeScreen(
     installedApps: List<AppInfo>,
     rightTabLabel: String?,
     leftTabLabel: String?,
+    onLoadAppIcon: suspend (String) -> ImageBitmap?,
     onAppClick: (AppInfo) -> Unit,
     onRemoveFavorite: (AppInfo) -> Unit,
     onToggleFocus: () -> Unit,
@@ -63,8 +65,15 @@ fun HomeScreen(
         }
     }
 
-    val prayerInfo = remember(nowMillis / 60_000, state.prayerCityId) {
-        PrayerTimesCalculator.getNextPrayer(state.prayerCityId, nowMillis)
+    val prayerInfo = remember(
+        nowMillis / 60_000,
+        state.prayerCityId,
+        state.useGpsLocation,
+        state.customLat,
+        state.customLng,
+        state.customLocationLabel
+    ) {
+        PrayerTimesCalculator.getNextPrayerForState(state, nowMillis)
     }
 
     val timeStr = remember(nowMillis) {
@@ -142,29 +151,49 @@ fun HomeScreen(
                 }
             }
 
-            // Next Prayer Pill (Dynamic Selected City)
+            // Next Prayer Card (Dynamic Selected City — Expandable)
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(colors.accentWarmSoft)
-                    .border(1.dp, colors.accentWarm.copy(alpha = 0.45f), RoundedCornerShape(50))
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
                     .clickable { showAllPrayers = !showAllPrayers }
-                    .padding(horizontal = 13.dp, vertical = 7.dp),
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(colors.accentWarm)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(colors.accentWarm)
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "${prayerInfo.nextPrayer.localizedName(strings.isArabic)}  ${prayerInfo.nextPrayer.format12h(strings.isArabic)}",
+                            fontFamily = appFont,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textPrimary
+                        )
+                        Text(
+                            text = "${prayerInfo.formatRemaining(strings.isArabic)} • ${prayerInfo.city.localizedName(strings.isArabic)}",
+                            fontFamily = appFont,
+                            fontSize = 12.sp,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
                 Text(
-                    text = "${prayerInfo.nextPrayer.localizedName(strings.isArabic)} ${prayerInfo.nextPrayer.format12h(strings.isArabic)} • ${prayerInfo.formatRemaining(strings.isArabic)}",
-                    fontFamily = appFont,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textPrimary
+                    text = if (showAllPrayers) "▴" else "▾",
+                    fontSize = 14.sp,
+                    color = colors.textMuted
                 )
             }
 
@@ -366,12 +395,19 @@ fun HomeScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
+                            AppIconView(
+                                packageName = app.packageName,
+                                displayStyle = state.appDisplayStyle,
+                                size = 38.dp,
+                                loadIcon = onLoadAppIcon
+                            )
                             Text(
                                 text = app.label,
                                 fontFamily = appFont,
-                                fontSize = 25.sp,
+                                fontSize = if (state.appDisplayStyle == "text") 25.sp else 19.sp,
                                 fontWeight = FontWeight.Light,
                                 color = colors.textPrimary
                             )

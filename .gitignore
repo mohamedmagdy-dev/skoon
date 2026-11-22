@@ -26,6 +26,11 @@ android/local.properties
 *.swp
 *.swo
 
+# Web App / Node
+node_modules/
+web-prototype/dist/
+web-prototype/.vite/
+
 # OS Junk
 .DS_Store
 Thumbs.db
