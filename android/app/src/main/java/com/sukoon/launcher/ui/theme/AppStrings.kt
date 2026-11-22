@@ -143,6 +143,10 @@ interface AppStrings {
     val catSpiritual: String
     val catFocus: String
     val catSystem: String
+    val catDisplaySub: String
+    val catSpiritualSub: String
+    val catFocusSub: String
+    val catSystemSub: String
     val appDisplaySection: String
     val appDisplaySubtitle: String
     val styleTextOnly: String
@@ -460,6 +464,10 @@ object ArabicStrings : AppStrings {
     override val catSpiritual = "الروحانيات"
     override val catFocus = "التركيز والتنقل"
     override val catSystem = "النظام"
+    override val catDisplaySub = "الثيمات، الخطوط، الأيقونات، اللغة، الحركة"
+    override val catSpiritualSub = "المدينة، الأذان، السكينة، القبلة، القرآن"
+    override val catFocusSub = "وضع التركيز، وقفة التأمل، التابات، الاهتزاز"
+    override val catSystemSub = "الصوت، الإشعارات، البصمة، اللانشر، الضبط"
     override val appDisplaySection = "طريقة عرض التطبيقات"
     override val appDisplaySubtitle = "اختر كيف تظهر التطبيقات في الرئيسية والدرج"
     override val styleTextOnly = "نص فقط"
@@ -792,6 +800,10 @@ object EnglishStrings : AppStrings {
     override val catSpiritual = "Spiritual"
     override val catFocus = "Focus & Nav"
     override val catSystem = "System"
+    override val catDisplaySub = "Themes, fonts, icons, language, motion"
+    override val catSpiritualSub = "City/GPS, Adhan, Prayer Calm, Qibla, Quran"
+    override val catFocusSub = "Focus Mode, Mindful Pause, tabs, haptics"
+    override val catSystemSub = "Volume, notifications, launcher, reset"
     override val appDisplaySection = "App Display Style"
     override val appDisplaySubtitle = "Choose how apps appear on Home & App Drawer"
     override val styleTextOnly = "Text Only"

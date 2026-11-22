@@ -1,6 +1,14 @@
 package com.sukoon.launcher.ui.screens
 
 import android.media.AudioManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +51,8 @@ import com.sukoon.launcher.service.muezzinOptionFor
 import com.sukoon.launcher.ui.VolumeLevels
 import com.sukoon.launcher.ui.theme.APP_FONT_OPTIONS
 import com.sukoon.launcher.ui.theme.APP_THEME_OPTIONS
+import com.sukoon.launcher.ui.theme.LocalAnimationsEnabled
+import com.sukoon.launcher.ui.theme.themeOptionFor
 import com.sukoon.launcher.ui.theme.LocalAppFont
 import com.sukoon.launcher.ui.theme.LocalAppStrings
 import com.sukoon.launcher.ui.theme.LocalSukoonColors
@@ -465,17 +475,25 @@ fun SettingsOverlay(
     val colors = LocalSukoonColors.current
     val appFont = LocalAppFont.current
     val strings = LocalAppStrings.current
+    val animOn = LocalAnimationsEnabled.current
     LaunchedEffect(Unit) { onRefreshVolumes() }
 
-    var category by remember { mutableStateOf("all") } // all | display | spiritual | focus | system
+    // null = 2x2 Category Hub; "display" | "spiritual" | "focus" | "system" = dedicated sub-page
+    var activeCategory by remember { mutableStateOf<String?>(null) }
     var openPanel by remember { mutableStateOf<String?>(null) } // fonts | city | tabs | volume
     var cityQuery by remember { mutableStateOf("") }
     var showResetConfirm by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = activeCategory != null) {
+        activeCategory = null
+        openPanel = null
+    }
 
     val selectedCity = remember(state.prayerCityId, state.useGpsLocation, state.customLat, state.customLng, state.customLocationLabel) {
         PrayerTimesCalculator.resolveCityForState(state)
     }
     val selectedFont = remember(state.appFontId) { fontOptionFor(state.appFontId) }
+    val selectedTheme = remember(state.appThemeId, state.darkTheme) { themeOptionFor(state.appThemeId, state.darkTheme) }
     val filteredCities = remember(cityQuery) {
         val q = cityQuery.trim()
         if (q.isEmpty()) PRAYER_CITIES
@@ -492,7 +510,13 @@ fun SettingsOverlay(
     }
     val homeEnabledIdx = enabledIds.indexOf("home")
 
-    fun showCat(cat: String) = category == "all" || category == cat
+    fun categoryTitle(cat: String?): String = when (cat) {
+        "display" -> strings.catDisplay
+        "spiritual" -> strings.catSpiritual
+        "focus" -> strings.catFocus
+        "system" -> strings.catSystem
+        else -> strings.settingsTitle
+    }
 
     Column(
         modifier = Modifier
@@ -503,46 +527,170 @@ fun SettingsOverlay(
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Top Header (adapts cleanly between Category Hub & Category Sub-Page)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(strings.customizeSukoon, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
-                Text(strings.settingsTitle, fontFamily = appFont, fontSize = 20.sp, color = colors.textPrimary)
+            if (activeCategory == null) {
+                Column {
+                    Text(strings.customizeSukoon, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+                    Text(strings.settingsTitle, fontFamily = appFont, fontSize = 22.sp, fontWeight = FontWeight.Light, color = colors.textPrimary)
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SmallChip(strings.backArrow) {
+                        activeCategory = null
+                        openPanel = null
+                    }
+                    Text(
+                        text = categoryTitle(activeCategory),
+                        fontFamily = appFont,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textPrimary
+                    )
+                }
             }
             SmallChip(strings.done, active = true) { onClose() }
         }
 
-        // Category Filter Pills
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            listOf(
-                "all" to strings.catAll,
-                "display" to strings.catDisplay,
-                "spiritual" to strings.catSpiritual,
-                "focus" to strings.catFocus,
-                "system" to strings.catSystem
-            ).forEach { (id, label) ->
-                SmallChip(label = label, active = category == id) { category = id }
+        // Quick horizontal category switcher when inside a sub-page
+        if (activeCategory != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(
+                    "display" to strings.catDisplay,
+                    "spiritual" to strings.catSpiritual,
+                    "focus" to strings.catFocus,
+                    "system" to strings.catSystem
+                ).forEach { (id, label) ->
+                    SmallChip(label = label, active = activeCategory == id) {
+                        activeCategory = id
+                        openPanel = null
+                    }
+                }
             }
         }
 
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            // ===== GROUP 1: DISPLAY & APPEARANCE =====
-            if (showCat("display")) {
+        AnimatedContent(
+            targetState = activeCategory,
+            modifier = Modifier.weight(1f),
+            transitionSpec = {
+                if (animOn) {
+                    fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+                } else {
+                    EnterTransition.None togetherWith ExitTransition.None
+                }
+            },
+            label = "settingsCategoryNav"
+        ) { currentCat ->
+            if (currentCat == null) {
+                // ===== CATEGORY HUB: 2x2 ORGANIZED CARDS SIDE-BY-SIDE =====
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SettingsCategoryTile(
+                            emoji = "🎨",
+                            title = strings.catDisplay,
+                            subtitle = strings.catDisplaySub,
+                            badge = selectedTheme.localizedName(strings.isArabic),
+                            modifier = Modifier.weight(1f)
+                        ) { activeCategory = "display" }
+
+                        SettingsCategoryTile(
+                            emoji = "🕌",
+                            title = strings.catSpiritual,
+                            subtitle = strings.catSpiritualSub,
+                            badge = selectedCity.localizedName(strings.isArabic),
+                            modifier = Modifier.weight(1f)
+                        ) { activeCategory = "spiritual" }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SettingsCategoryTile(
+                            emoji = "🎯",
+                            title = strings.catFocus,
+                            subtitle = strings.catFocusSub,
+                            badge = if (state.focusMode) strings.focusOn else strings.normalMode,
+                            modifier = Modifier.weight(1f)
+                        ) { activeCategory = "focus" }
+
+                        SettingsCategoryTile(
+                            emoji = "⚙️",
+                            title = strings.catSystem,
+                            subtitle = strings.catSystemSub,
+                            badge = if (isNotificationAccessGranted) "✓" else strings.open,
+                            modifier = Modifier.weight(1f)
+                        ) { activeCategory = "system" }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // Calm At-a-Glance Status Summary Card
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surface)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(strings.fontSection, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+                            Text(selectedFont.localizedName(strings.isArabic), fontFamily = appFont, fontSize = 12.sp, color = colors.textPrimary)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(strings.muezzinVoiceLabel, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+                            Text(
+                                text = if (state.adhanEnabled) muezzinOptionFor(state.adhanMuezzinId).localizedName(strings.isArabic) else strings.hiddenLabel,
+                                fontFamily = appFont,
+                                fontSize = 12.sp,
+                                color = if (state.adhanEnabled) colors.accentWarm else colors.textSecondary
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(strings.tabsOrderSection.substringBefore(" ("), fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+                            Text(
+                                "${enabledIds.size.formatDigits(strings.isArabic)} / ${state.pageConfig.size.formatDigits(strings.isArabic)}",
+                                fontFamily = appFont,
+                                fontSize = 12.sp,
+                                color = colors.textPrimary
+                            )
+                        }
+                    }
+                }
+            } else {
+                // ===== DEDICATED CATEGORY SUB-PAGE =====
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // ===== GROUP 1: DISPLAY & APPEARANCE =====
+                    if (currentCat == "display") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(strings.catDisplay, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
 
@@ -772,7 +920,7 @@ fun SettingsOverlay(
             }
 
             // ===== GROUP 2: SPIRITUAL =====
-            if (showCat("spiritual")) {
+            if (currentCat == "spiritual") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(strings.catSpiritual, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
 
@@ -1096,7 +1244,7 @@ fun SettingsOverlay(
             }
 
             // ===== GROUP 3: FOCUS & NAVIGATION =====
-            if (showCat("focus")) {
+            if (currentCat == "focus") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(strings.catFocus, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
 
@@ -1242,7 +1390,7 @@ fun SettingsOverlay(
             }
 
             // ===== GROUP 4: SYSTEM & VOLUME =====
-            if (showCat("system")) {
+            if (currentCat == "system") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(strings.catSystem, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
 
@@ -1372,6 +1520,8 @@ fun SettingsOverlay(
             }
 
             Spacer(Modifier.height(14.dp))
+                }
+            }
         }
     }
 
@@ -1396,6 +1546,71 @@ fun SettingsOverlay(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun SettingsCategoryTile(
+    emoji: String,
+    title: String,
+    subtitle: String,
+    badge: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val colors = LocalSukoonColors.current
+    val appFont = LocalAppFont.current
+    Column(
+        modifier = modifier
+            .heightIn(min = 148.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .padding(14.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.accentWarmSoft)
+                    .border(1.dp, colors.accentWarm.copy(alpha = 0.45f), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(emoji, fontSize = 18.sp)
+            }
+            Text(
+                text = badge,
+                fontFamily = appFont,
+                fontSize = 10.sp,
+                color = colors.accentWarm,
+                maxLines = 1
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = title,
+                fontFamily = appFont,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+            Text(
+                text = subtitle,
+                fontFamily = appFont,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                color = colors.textSecondary,
+                maxLines = 2
+            )
+        }
     }
 }
 
