@@ -39,8 +39,10 @@ data class LauncherState(
     val onboardingStatus: String = "not_started", // "not_started" | "in_progress" | "completed"
     val onboardingStep: Int = 0,
     val darkTheme: Boolean = true,
+    val appThemeId: String = "dark_oled",
     val appLanguage: String = "ar", // "ar" | "en"
-    val appFontId: String = "ibm", // "ibm" | "tajawal" | "almarai" | "amiri" | "system"
+    val appFontId: String = "ibm",
+    val appFontWeight: String = "normal", // "light" | "normal" | "bold"
     val appDisplayStyle: String = "text", // "text" | "monochrome" | "original"
     val prayerCityId: String = "alexandria",
     val useGpsLocation: Boolean = false,

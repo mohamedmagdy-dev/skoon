@@ -40,10 +40,12 @@ import com.sukoon.launcher.data.PrayerTimesCalculator
 import com.sukoon.launcher.data.formatDigits
 import com.sukoon.launcher.ui.VolumeLevels
 import com.sukoon.launcher.ui.theme.APP_FONT_OPTIONS
+import com.sukoon.launcher.ui.theme.APP_THEME_OPTIONS
 import com.sukoon.launcher.ui.theme.LocalAppFont
 import com.sukoon.launcher.ui.theme.LocalAppStrings
 import com.sukoon.launcher.ui.theme.LocalSukoonColors
 import com.sukoon.launcher.ui.theme.fontOptionFor
+import com.sukoon.launcher.ui.theme.themeOptionFor
 import kotlin.math.abs
 
 // =========================================
@@ -424,7 +426,9 @@ fun SettingsOverlay(
     isLocating: Boolean,
     onSetLanguage: (String) -> Unit,
     onSetAppFont: (String) -> Unit,
+    onSetAppFontWeight: (String) -> Unit,
     onSetAppDisplayStyle: (String) -> Unit,
+    onSetAppTheme: (String) -> Unit,
     onSetPrayerCity: (String) -> Unit,
     onRequestLocation: () -> Unit,
     onTogglePrayerReminder: (Boolean) -> Unit,
@@ -617,16 +621,66 @@ fun SettingsOverlay(
                             .background(colors.surface)
                             .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
                     ) {
-                        // Theme Row
+                        // Color Themes Row (6 Professional Themes with swatches)
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(strings.themesSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(
+                                    text = themeOptionFor(state.appThemeId, state.darkTheme).localizedName(strings.isArabic),
+                                    fontFamily = appFont,
+                                    fontSize = 12.sp,
+                                    color = colors.accentWarm
+                                )
+                            }
+                            APP_THEME_OPTIONS.chunked(2).forEach { rowThemes ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    rowThemes.forEach { tOpt ->
+                                        val active = state.appThemeId == tOpt.id
+                                        Row(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(if (active) colors.accentWarmSoft else colors.background)
+                                                .border(1.dp, if (active) colors.accentWarm else colors.borderSubtle, RoundedCornerShape(10.dp))
+                                                .clickable { onSetAppTheme(tOpt.id) }
+                                                .padding(horizontal = 10.dp, vertical = 9.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                                    .background(tOpt.colors.background)
+                                                    .border(2.dp, tOpt.colors.accentWarm, CircleShape)
+                                            )
+                                            Text(
+                                                text = tOpt.localizedName(strings.isArabic),
+                                                fontFamily = appFont,
+                                                fontSize = 12.sp,
+                                                color = if (active) colors.accentWarm else colors.textPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Font Weight Row (Light / Regular / Bold)
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(strings.appearanceSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                            Text(strings.fontWeightSection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                SmallChip(strings.darkOled, active = state.darkTheme) { onSetDarkTheme(true) }
-                                SmallChip(strings.lightPaper, active = !state.darkTheme) { onSetDarkTheme(false) }
+                                SmallChip(strings.weightLight, active = state.appFontWeight == "light") { onSetAppFontWeight("light") }
+                                SmallChip(strings.weightRegular, active = state.appFontWeight == "normal") { onSetAppFontWeight("normal") }
+                                SmallChip(strings.weightBold, active = state.appFontWeight == "bold") { onSetAppFontWeight("bold") }
                             }
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))

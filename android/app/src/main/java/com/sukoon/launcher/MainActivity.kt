@@ -60,6 +60,7 @@ import com.sukoon.launcher.ui.theme.LocalAppStrings
 import com.sukoon.launcher.ui.theme.LocalSukoonColors
 import com.sukoon.launcher.ui.theme.SukoonTheme
 import com.sukoon.launcher.ui.theme.stringsFor
+import com.sukoon.launcher.ui.theme.themeOptionFor
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -251,9 +252,11 @@ class MainActivity : ComponentActivity() {
             val state by viewModel.state.collectAsState()
             val layoutDir = if (state.appLanguage == "en") LayoutDirection.Ltr else LayoutDirection.Rtl
 
+            val activeTheme = themeOptionFor(state.appThemeId, state.darkTheme)
+
             // Dynamically adapt status & navigation bar icon contrast for Dark / Light themes on all Android versions
-            LaunchedEffect(state.darkTheme) {
-                val style = if (state.darkTheme) {
+            LaunchedEffect(activeTheme.isDark) {
+                val style = if (activeTheme.isDark) {
                     SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                 } else {
                     SystemBarStyle.light(
@@ -263,13 +266,15 @@ class MainActivity : ComponentActivity() {
                 }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
-                controller.isAppearanceLightStatusBars = !state.darkTheme
-                controller.isAppearanceLightNavigationBars = !state.darkTheme
+                controller.isAppearanceLightStatusBars = !activeTheme.isDark
+                controller.isAppearanceLightNavigationBars = !activeTheme.isDark
             }
 
             SukoonTheme(
+                themeId = state.appThemeId,
                 darkTheme = state.darkTheme,
                 appFontId = state.appFontId,
+                appFontWeightId = state.appFontWeight,
                 appLanguage = state.appLanguage
             ) {
                 CompositionLocalProvider(LocalLayoutDirection provides layoutDir) {
@@ -282,7 +287,9 @@ class MainActivity : ComponentActivity() {
                             onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
                             onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
                             onSetDarkTheme = { viewModel.setDarkTheme(it) },
+                            onSetAppTheme = { viewModel.setAppTheme(it) },
                             onSetAppFont = { viewModel.setAppFont(it) },
+                            onSetAppFontWeight = { viewModel.setAppFontWeight(it) },
                             onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
                             onSetPrayerCity = { viewModel.setPrayerCity(it) },
                             onRequestLocation = { requestUserLocation() },
@@ -626,7 +633,9 @@ private fun SukoonLauncherRoot(
                 isLocating = isLocating,
                 onSetLanguage = { viewModel.setAppLanguage(it) },
                 onSetAppFont = { viewModel.setAppFont(it) },
+                onSetAppFontWeight = { viewModel.setAppFontWeight(it) },
                 onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
+                onSetAppTheme = { viewModel.setAppTheme(it) },
                 onSetPrayerCity = { viewModel.setPrayerCity(it) },
                 onRequestLocation = onRequestLocation,
                 onTogglePrayerReminder = onTogglePrayerReminder,

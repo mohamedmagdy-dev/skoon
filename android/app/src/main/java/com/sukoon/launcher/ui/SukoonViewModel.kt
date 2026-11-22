@@ -17,6 +17,7 @@ import com.sukoon.launcher.service.SukoonAccessibilityService
 import com.sukoon.launcher.service.SukoonNotificationService
 import com.sukoon.launcher.ui.theme.fontOptionFor
 import com.sukoon.launcher.ui.theme.stringsFor
+import com.sukoon.launcher.ui.theme.themeOptionFor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -246,7 +247,20 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
 
     // ===== Theme, Language, Font, Prayer City & Focus =====
     fun setDarkTheme(dark: Boolean) {
-        updateState { it.copy(darkTheme = dark) }
+        updateState { it.copy(darkTheme = dark, appThemeId = if (dark) "dark_oled" else "light_paper") }
+    }
+
+    fun setAppTheme(themeId: String) {
+        val opt = themeOptionFor(themeId)
+        updateState { it.copy(appThemeId = opt.id, darkTheme = opt.isDark) }
+    }
+
+    fun setAppFontWeight(weightId: String) {
+        val normalized = when (weightId) {
+            "light", "bold" -> weightId
+            else -> "normal"
+        }
+        updateState { it.copy(appFontWeight = normalized) }
     }
 
     fun setAppLanguage(lang: String) {

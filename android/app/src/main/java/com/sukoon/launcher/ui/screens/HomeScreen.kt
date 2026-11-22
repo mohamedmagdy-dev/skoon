@@ -26,6 +26,7 @@ import com.sukoon.launcher.data.LauncherState
 import com.sukoon.launcher.data.PrayerTimesCalculator
 import com.sukoon.launcher.data.formatDigits
 import com.sukoon.launcher.ui.theme.LocalAppFont
+import com.sukoon.launcher.ui.theme.LocalAppFontWeight
 import com.sukoon.launcher.ui.theme.LocalAppStrings
 import com.sukoon.launcher.ui.theme.LocalSukoonColors
 import kotlinx.coroutines.delay
@@ -50,6 +51,7 @@ fun HomeScreen(
 ) {
     val colors = LocalSukoonColors.current
     val appFont = LocalAppFont.current
+    val appWeight = LocalAppFontWeight.current
     val strings = LocalAppStrings.current
     var editingFavorites by remember { mutableStateOf(false) }
     var showAllPrayers by remember { mutableStateOf(false) }
@@ -123,7 +125,7 @@ fun HomeScreen(
                     text = timeStr,
                     fontFamily = appFont,
                     fontSize = 58.sp,
-                    fontWeight = FontWeight.Light,
+                    fontWeight = if (appWeight == FontWeight.Bold) FontWeight.Medium else FontWeight.Light,
                     color = colors.textPrimary,
                     letterSpacing = (-2).sp
                 )
@@ -288,31 +290,6 @@ fun HomeScreen(
                     )
                 }
 
-                // Quick Search + Volume Pill
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(colors.surface)
-                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(50))
-                        .clickable { onOpenSearch() }
-                        .padding(horizontal = 11.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(colors.accentWarm)
-                    )
-                    Text(
-                        text = strings.searchAndVolume,
-                        fontFamily = appFont,
-                        fontSize = 11.sp,
-                        color = colors.textSecondary
-                    )
-                }
-
                 // Quick Settings Pill
                 Row(
                     modifier = Modifier
@@ -408,7 +385,7 @@ fun HomeScreen(
                                 text = app.label,
                                 fontFamily = appFont,
                                 fontSize = if (state.appDisplayStyle == "text") 25.sp else 19.sp,
-                                fontWeight = FontWeight.Light,
+                                fontWeight = appWeight,
                                 color = colors.textPrimary
                             )
                             if (isDistracting && !editingFavorites) {

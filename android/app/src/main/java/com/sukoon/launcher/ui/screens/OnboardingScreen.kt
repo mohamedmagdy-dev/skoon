@@ -39,7 +39,9 @@ fun OnboardingScreen(
     onTogglePageEnabled: (String) -> Unit,
     onMovePage: (Int, Int) -> Unit,
     onSetDarkTheme: (Boolean) -> Unit,
+    onSetAppTheme: (String) -> Unit,
     onSetAppFont: (String) -> Unit,
+    onSetAppFontWeight: (String) -> Unit,
     onSetAppDisplayStyle: (String) -> Unit,
     onSetPrayerCity: (String) -> Unit,
     onRequestLocation: () -> Unit,
@@ -405,11 +407,53 @@ fun OnboardingScreen(
                             }
                         }
 
-                        // Theme
-                        Text(strings.appearanceSection, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SmallChip(strings.darkOled, active = state.darkTheme, modifier = Modifier.weight(1f)) { onSetDarkTheme(true) }
-                            SmallChip(strings.lightPaper, active = !state.darkTheme, modifier = Modifier.weight(1f)) { onSetDarkTheme(false) }
+                        // Color Themes (6 curated themes with color swatch)
+                        Text(strings.themesSection, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+                        APP_THEME_OPTIONS.chunked(2).forEach { rowThemes ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowThemes.forEach { tOpt ->
+                                    val active = state.appThemeId == tOpt.id
+                                    Row(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (active) colors.accentWarmSoft else colors.surface)
+                                            .border(1.dp, if (active) colors.accentWarm else colors.borderSubtle, RoundedCornerShape(10.dp))
+                                            .clickable { onSetAppTheme(tOpt.id) }
+                                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(tOpt.colors.background)
+                                                .border(2.dp, tOpt.colors.accentWarm, CircleShape)
+                                        )
+                                        Text(
+                                            text = tOpt.localizedName(strings.isArabic),
+                                            fontFamily = appFont,
+                                            fontSize = 12.sp,
+                                            color = if (active) colors.accentWarm else colors.textPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Font Weight (Light / Regular / Bold)
+                        Text(strings.fontWeightSection, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "light" to strings.weightLight,
+                                "normal" to strings.weightRegular,
+                                "bold" to strings.weightBold
+                            ).forEach { (id, label) ->
+                                SmallChip(label = label, active = state.appFontWeight == id, modifier = Modifier.weight(1f)) {
+                                    onSetAppFontWeight(id)
+                                }
+                            }
                         }
 
                         // Fonts

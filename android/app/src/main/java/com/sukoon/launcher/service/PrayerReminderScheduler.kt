@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.sukoon.launcher.MainActivity
@@ -17,7 +19,8 @@ import com.sukoon.launcher.data.SukoonRepository
 import com.sukoon.launcher.data.formatDigits
 
 object PrayerReminderScheduler {
-    const val CHANNEL_ID = "sukoon_prayer_reminders"
+    // v2 channel guarantees fresh audible sound & vibration configuration on Android 8+
+    const val CHANNEL_ID = "sukoon_prayer_reminders_v2"
     private const val REQUEST_CODE = 7701
 
     const val EXTRA_PRAYER_NAME_AR = "prayer_name_ar"
@@ -28,12 +31,21 @@ object PrayerReminderScheduler {
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "مواقيت الصلاة • Prayer Reminders",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Gentle reminders before prayer times"
+                description = "Audible reminders before prayer times"
+                setSound(soundUri, audioAttrs)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 250, 150, 250)
             }
             nm.createNotificationChannel(channel)
         }
@@ -62,7 +74,6 @@ object PrayerReminderScheduler {
         val leadMin = state.prayerReminderMinutesBefore.coerceIn(1, 60)
         val info = PrayerTimesCalculator.getNextPrayerForState(state, now)
 
-        // If the trigger time for the immediate next prayer is already in the past, look past it
         var triggerAt = now + (info.remainingMinutes - leadMin) * 60_000L
         var targetPrayer = info.nextPrayer
 
@@ -91,7 +102,6 @@ object PrayerReminderScheduler {
         try {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
         } catch (_: Exception) {
-            // Gracefully ignore on restricted devices
         }
     }
 }
@@ -122,11 +132,17 @@ class PrayerReminderReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
         val notif = NotificationCompat.Builder(context, PrayerReminderScheduler.CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(0, 250, 150, 250))
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .setContentIntent(openPi)
             .build()
@@ -135,10 +151,8 @@ class PrayerReminderReceiver : BroadcastReceiver() {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             nm?.notify(7702, notif)
         } catch (_: SecurityException) {
-            // Notification permission revoked
         }
 
-        // Schedule the subsequent prayer reminder
         try {
             val repo = SukoonRepository(context)
             val state = repo.loadState()
@@ -146,7 +160,6 @@ class PrayerReminderReceiver : BroadcastReceiver() {
                 PrayerReminderScheduler.scheduleNext(context, state)
             }
         } catch (_: Exception) {
-            // Ignore
         }
     }
 }
