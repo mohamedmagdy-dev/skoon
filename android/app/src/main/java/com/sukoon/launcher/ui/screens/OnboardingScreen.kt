@@ -33,13 +33,16 @@ import kotlinx.coroutines.delay
 @Composable
 fun OnboardingScreen(
     state: LauncherState,
+    isLocating: Boolean,
     onSetStep: (Int) -> Unit,
     onSetLanguage: (String) -> Unit,
     onTogglePageEnabled: (String) -> Unit,
     onMovePage: (Int, Int) -> Unit,
     onSetDarkTheme: (Boolean) -> Unit,
     onSetAppFont: (String) -> Unit,
+    onSetAppDisplayStyle: (String) -> Unit,
     onSetPrayerCity: (String) -> Unit,
+    onRequestLocation: () -> Unit,
     onComplete: () -> Unit
 ) {
     val colors = LocalSukoonColors.current
@@ -89,8 +92,12 @@ fun OnboardingScreen(
     }
 
     var cityQuery by remember { mutableStateOf("") }
-    val selectedCity = remember(state.prayerCityId) { PrayerTimesCalculator.findCity(state.prayerCityId) }
-    val nextPrayer = remember(state.prayerCityId) { PrayerTimesCalculator.getNextPrayer(state.prayerCityId) }
+    val selectedCity = remember(state.prayerCityId, state.useGpsLocation, state.customLat, state.customLng, state.customLocationLabel) {
+        PrayerTimesCalculator.resolveCityForState(state)
+    }
+    val nextPrayer = remember(state.prayerCityId, state.useGpsLocation, state.customLat, state.customLng) {
+        PrayerTimesCalculator.getNextPrayerForState(state)
+    }
     val filteredCities = remember(cityQuery) {
         val q = cityQuery.trim()
         if (q.isEmpty()) PRAYER_CITIES
@@ -333,6 +340,71 @@ fun OnboardingScreen(
                             Text("Less noise. More meaning.", fontFamily = appFont, fontSize = 14.sp, color = colors.textSecondary)
                         }
 
+                        // App Display Style (Text / Monochrome / Original)
+                        Text(strings.appDisplaySection, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                Triple("text", strings.styleTextOnly, strings.styleTextOnlySub),
+                                Triple("monochrome", strings.styleMonochrome, strings.styleMonochromeSub),
+                                Triple("original", strings.styleOriginal, strings.styleOriginalSub)
+                            ).forEach { (id, title, sub) ->
+                                val active = state.appDisplayStyle == id
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (active) colors.accentWarmSoft else colors.surface)
+                                        .border(1.dp, if (active) colors.accentWarm else colors.borderSubtle, RoundedCornerShape(12.dp))
+                                        .clickable { onSetAppDisplayStyle(id) }
+                                        .padding(vertical = 10.dp, horizontal = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.height(24.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        when (id) {
+                                            "text" -> Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Box(Modifier.width(30.dp).height(4.dp).clip(RoundedCornerShape(50)).background(colors.textPrimary.copy(alpha = 0.8f)))
+                                                Box(Modifier.width(20.dp).height(3.dp).clip(RoundedCornerShape(50)).background(colors.textMuted))
+                                            }
+                                            "monochrome" -> {
+                                                Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(colors.surfaceHover).border(1.dp, colors.borderStrong, RoundedCornerShape(5.dp)))
+                                                Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(colors.surfaceHover).border(1.dp, colors.borderStrong, RoundedCornerShape(5.dp)))
+                                            }
+                                            else -> {
+                                                Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFF25D366)))
+                                                Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFEF4444)))
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = title,
+                                        fontFamily = appFont,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (active) colors.accentWarm else colors.textPrimary,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = sub,
+                                        fontFamily = appFont,
+                                        fontSize = 9.sp,
+                                        color = colors.textMuted,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+
                         // Theme
                         Text(strings.appearanceSection, fontFamily = appFont, fontSize = 12.sp, color = colors.textMuted)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -367,24 +439,54 @@ fun OnboardingScreen(
                             Text(strings.obLocationSub, fontFamily = appFont, fontSize = 13.sp, color = colors.textSecondary)
                         }
 
-                        // Current City Preview
-                        Row(
+                        // Current City Preview + GPS Detect Button
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(colors.accentWarmSoft)
                                 .border(1.dp, colors.accentWarm.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                                 .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Column {
-                                Text(selectedCity.localizedFull(strings.isArabic), fontFamily = appFont, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (state.useGpsLocation) selectedCity.localizedName(strings.isArabic) else selectedCity.localizedFull(strings.isArabic),
+                                        fontFamily = appFont,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textPrimary
+                                    )
+                                    Text(
+                                        text = "${nextPrayer.nextPrayer.localizedName(strings.isArabic)} • ${nextPrayer.nextPrayer.format12h(strings.isArabic)}" +
+                                            if (state.useGpsLocation) "  •  GPS" else "",
+                                        fontFamily = appFont,
+                                        fontSize = 12.sp,
+                                        color = colors.accentWarm
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(colors.surface)
+                                    .border(1.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+                                    .clickable(enabled = !isLocating) { onRequestLocation() }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = "${nextPrayer.nextPrayer.localizedName(strings.isArabic)} • ${nextPrayer.nextPrayer.format12h(strings.isArabic)}",
+                                    text = if (isLocating) strings.detectingLocation else strings.detectLocationBtn,
                                     fontFamily = appFont,
-                                    fontSize = 12.sp,
-                                    color = colors.accentWarm
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textPrimary
                                 )
                             }
                         }

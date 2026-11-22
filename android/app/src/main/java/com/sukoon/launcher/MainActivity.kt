@@ -1,10 +1,18 @@
 package com.sukoon.launcher
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
+import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -12,7 +20,12 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.Locale
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +65,144 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private val viewModel: SukoonViewModel by viewModels()
+
+    private val isLocatingState = mutableStateOf(false)
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            fetchCurrentLocation()
+        } else {
+            isLocatingState.value = false
+            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+        }
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.setPrayerReminderEnabled(true)
+        } else {
+            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastNotifPermissionDenied)
+        }
+    }
+
+    private fun requestUserLocation() {
+        val hasFine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (hasFine || hasCoarse) {
+            fetchCurrentLocation()
+        } else {
+            isLocatingState.value = true
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
+        }
+    }
+
+    private fun togglePrayerReminderWithPermission(enable: Boolean) {
+        if (!enable) {
+            viewModel.setPrayerReminderEnabled(false)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        viewModel.setPrayerReminderEnabled(true)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun fetchCurrentLocation() {
+        isLocatingState.value = true
+        val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        if (lm == null) {
+            isLocatingState.value = false
+            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+            return
+        }
+
+        // Try best last known location first for instant response
+        val providers = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        )
+        var best: Location? = null
+        for (p in providers) {
+            try {
+                val loc = lm.getLastKnownLocation(p)
+                if (loc != null && (best == null || loc.accuracy < best.accuracy)) {
+                    best = loc
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        if (best != null) {
+            resolveAndApplyLocation(best.latitude, best.longitude)
+            return
+        }
+
+        // Request fresh single location fix if no cached fix exists
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val activeProvider = when {
+                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                else -> null
+            }
+            if (activeProvider != null) {
+                try {
+                    lm.getCurrentLocation(
+                        activeProvider,
+                        CancellationSignal(),
+                        mainExecutor
+                    ) { loc ->
+                        if (loc != null) {
+                            resolveAndApplyLocation(loc.latitude, loc.longitude)
+                        } else {
+                            isLocatingState.value = false
+                            viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+                        }
+                    }
+                    return
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        isLocatingState.value = false
+        viewModel.showToast(stringsFor(viewModel.state.value.appLanguage).toastLocationFailed)
+    }
+
+    private fun resolveAndApplyLocation(lat: Double, lng: Double) {
+        lifecycleScope.launch {
+            val isAr = viewModel.state.value.appLanguage != "en"
+            val label = withContext(Dispatchers.IO) {
+                try {
+                    @Suppress("DEPRECATION")
+                    val list = Geocoder(this@MainActivity, if (isAr) Locale("ar") else Locale.ENGLISH)
+                        .getFromLocation(lat, lng, 1)
+                    val addr = list?.firstOrNull()
+                    addr?.locality ?: addr?.subAdminArea ?: addr?.adminArea ?: ""
+                } catch (_: Exception) {
+                    ""
+                }
+            }
+            isLocatingState.value = false
+            viewModel.setGpsLocation(lat, lng, label)
+        }
+    }
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -125,18 +276,24 @@ class MainActivity : ComponentActivity() {
                     if (state.onboardingStatus != "completed") {
                         OnboardingScreen(
                             state = state,
+                            isLocating = isLocatingState.value,
                             onSetStep = { viewModel.setOnboardingStep(it) },
                             onSetLanguage = { viewModel.setAppLanguage(it) },
                             onTogglePageEnabled = { viewModel.togglePageEnabled(it) },
                             onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
                             onSetDarkTheme = { viewModel.setDarkTheme(it) },
                             onSetAppFont = { viewModel.setAppFont(it) },
+                            onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
                             onSetPrayerCity = { viewModel.setPrayerCity(it) },
+                            onRequestLocation = { requestUserLocation() },
                             onComplete = { viewModel.completeOnboarding() }
                         )
                     } else {
                         SukoonLauncherRoot(
                             viewModel = viewModel,
+                            isLocating = isLocatingState.value,
+                            onRequestLocation = { requestUserLocation() },
+                            onTogglePrayerReminder = { togglePrayerReminderWithPermission(it) },
                             onSetBlackScreenWindow = { enabled -> setBlackScreenMode(enabled) },
                             onOpenAccessibility = {
                                 try {
@@ -163,6 +320,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         viewModel.refreshApps()
         viewModel.refreshVolumes()
+        viewModel.syncPrayerReminderSchedule()
     }
 
     override fun onPause() {
@@ -183,6 +341,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SukoonLauncherRoot(
     viewModel: SukoonViewModel,
+    isLocating: Boolean,
+    onRequestLocation: () -> Unit,
+    onTogglePrayerReminder: (Boolean) -> Unit,
     onSetBlackScreenWindow: (Boolean) -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenDefaultHome: () -> Unit
@@ -438,10 +599,14 @@ private fun SukoonLauncherRoot(
                 state = state,
                 volumes = volumes,
                 isAccessibilityConnected = isAccConnected,
+                isLocating = isLocating,
                 onSetLanguage = { viewModel.setAppLanguage(it) },
                 onSetAppFont = { viewModel.setAppFont(it) },
                 onSetAppDisplayStyle = { viewModel.setAppDisplayStyle(it) },
                 onSetPrayerCity = { viewModel.setPrayerCity(it) },
+                onRequestLocation = onRequestLocation,
+                onTogglePrayerReminder = onTogglePrayerReminder,
+                onSetPrayerReminderMinutes = { viewModel.setPrayerReminderMinutes(it) },
                 onSetQuranLineHeight = { viewModel.setQuranLineHeight(it) },
                 onMovePage = { from, to -> viewModel.movePageConfig(from, to) },
                 onTogglePageEnabled = { viewModel.togglePageEnabled(it) },

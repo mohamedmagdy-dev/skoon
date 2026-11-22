@@ -43,6 +43,12 @@ data class LauncherState(
     val appFontId: String = "ibm", // "ibm" | "tajawal" | "almarai" | "amiri" | "system"
     val appDisplayStyle: String = "text", // "text" | "monochrome" | "original"
     val prayerCityId: String = "alexandria",
+    val useGpsLocation: Boolean = false,
+    val customLat: Double? = null,
+    val customLng: Double? = null,
+    val customLocationLabel: String = "",
+    val prayerReminderEnabled: Boolean = false,
+    val prayerReminderMinutesBefore: Int = 10,
     val focusMode: Boolean = false,
     val mindfulPauseSeconds: Int = 5,
     val hapticsEnabled: Boolean = true,

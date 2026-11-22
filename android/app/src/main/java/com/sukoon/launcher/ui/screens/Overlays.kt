@@ -420,10 +420,14 @@ fun SettingsOverlay(
     state: LauncherState,
     volumes: VolumeLevels,
     isAccessibilityConnected: Boolean,
+    isLocating: Boolean,
     onSetLanguage: (String) -> Unit,
     onSetAppFont: (String) -> Unit,
     onSetAppDisplayStyle: (String) -> Unit,
     onSetPrayerCity: (String) -> Unit,
+    onRequestLocation: () -> Unit,
+    onTogglePrayerReminder: (Boolean) -> Unit,
+    onSetPrayerReminderMinutes: (Int) -> Unit,
     onSetQuranLineHeight: (Float) -> Unit,
     onMovePage: (Int, Int) -> Unit,
     onTogglePageEnabled: (String) -> Unit,
@@ -450,7 +454,9 @@ fun SettingsOverlay(
     var cityQuery by remember { mutableStateOf("") }
     var showResetConfirm by remember { mutableStateOf(false) }
 
-    val selectedCity = remember(state.prayerCityId) { PrayerTimesCalculator.findCity(state.prayerCityId) }
+    val selectedCity = remember(state.prayerCityId, state.useGpsLocation, state.customLat, state.customLng, state.customLocationLabel) {
+        PrayerTimesCalculator.resolveCityForState(state)
+    }
     val selectedFont = remember(state.appFontId) { fontOptionFor(state.appFontId) }
     val filteredCities = remember(cityQuery) {
         val q = cityQuery.trim()
@@ -701,7 +707,13 @@ fun SettingsOverlay(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(strings.prayerCitySection, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
-                                Text(selectedCity.localizedFull(strings.isArabic), fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                Text(
+                                    text = if (state.useGpsLocation) "${selectedCity.localizedName(strings.isArabic)} • ${strings.gpsActiveLabel}"
+                                    else selectedCity.localizedFull(strings.isArabic),
+                                    fontFamily = appFont,
+                                    fontSize = 11.sp,
+                                    color = if (state.useGpsLocation) colors.accentWarm else colors.textSecondary
+                                )
                             }
                             Text(
                                 text = "${if (openPanel == "city") strings.close else strings.changeCityBtn} ${if (openPanel == "city") "▴" else "▾"}",
@@ -716,6 +728,26 @@ fun SettingsOverlay(
                                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // GPS Detect Button
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(colors.accentWarmSoft)
+                                        .border(1.dp, colors.accentWarm.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                        .clickable(enabled = !isLocating) { onRequestLocation() }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isLocating) strings.detectingLocation else strings.detectLocationBtn,
+                                        fontFamily = appFont,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.accentWarm
+                                    )
+                                }
+
                                 BasicTextField(
                                     value = cityQuery,
                                     onValueChange = { cityQuery = it },
@@ -758,6 +790,46 @@ fun SettingsOverlay(
                                             Text(city.localizedName(strings.isArabic), fontFamily = appFont, fontSize = 13.sp, color = if (isSel) colors.accentWarm else colors.textPrimary)
                                             Text(city.localizedCountry(strings.isArabic) + if (isSel) " ✓" else "", fontFamily = appFont, fontSize = 11.sp, color = if (isSel) colors.accentWarm else colors.textMuted)
                                         }
+                                    }
+                                }
+                            }
+                        }
+
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Pre-Prayer Notification Reminder Row
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(strings.prayerReminderTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                    Text(strings.prayerReminderSub, fontFamily = appFont, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                                Switch(
+                                    checked = state.prayerReminderEnabled,
+                                    onCheckedChange = onTogglePrayerReminder,
+                                    colors = SwitchDefaults.colors(checkedThumbColor = colors.background, checkedTrackColor = colors.accentWarm)
+                                )
+                            }
+
+                            if (state.prayerReminderEnabled) {
+                                Text(strings.reminderBeforeLabel, fontFamily = appFont, fontSize = 11.sp, color = colors.textMuted)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(5, 10, 15, 20, 30).forEach { mins ->
+                                        SmallChip(
+                                            label = strings.minutesShortFmt(mins.formatDigits(strings.isArabic)),
+                                            active = state.prayerReminderMinutesBefore == mins,
+                                            modifier = Modifier.weight(1f)
+                                        ) { onSetPrayerReminderMinutes(mins) }
                                     }
                                 }
                             }

@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sukoon.launcher.data.*
+import com.sukoon.launcher.service.PrayerReminderScheduler
 import com.sukoon.launcher.service.SukoonAccessibilityService
 import com.sukoon.launcher.ui.theme.fontOptionFor
 import com.sukoon.launcher.ui.theme.stringsFor
@@ -254,8 +255,57 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setPrayerCity(cityId: String) {
         val city = PrayerTimesCalculator.findCity(cityId)
-        updateState { it.copy(prayerCityId = city.id) }
+        updateState {
+            it.copy(
+                prayerCityId = city.id,
+                useGpsLocation = false
+            )
+        }
+        PrayerReminderScheduler.scheduleNext(getApplication(), _state.value)
         showToast(strings.toastCityUpdatedFmt(city.localizedName(strings.isArabic)))
+    }
+
+    fun setGpsLocation(lat: Double, lng: Double, label: String) {
+        val nearest = PrayerTimesCalculator.findNearestCity(lat, lng)
+        val cleanLabel = label.trim().ifEmpty { nearest.localizedName(strings.isArabic) }
+        updateState {
+            it.copy(
+                prayerCityId = nearest.id,
+                useGpsLocation = true,
+                customLat = lat,
+                customLng = lng,
+                customLocationLabel = cleanLabel
+            )
+        }
+        PrayerReminderScheduler.scheduleNext(getApplication(), _state.value)
+        showToast(strings.toastLocationUpdatedFmt(cleanLabel))
+    }
+
+    fun setPrayerReminderEnabled(enabled: Boolean) {
+        updateState { it.copy(prayerReminderEnabled = enabled) }
+        val cur = _state.value
+        PrayerReminderScheduler.scheduleNext(getApplication(), cur)
+        showToast(
+            if (enabled) strings.toastReminderOnFmt(cur.prayerReminderMinutesBefore.formatDigits(strings.isArabic))
+            else strings.toastReminderOff
+        )
+    }
+
+    fun setPrayerReminderMinutes(minutes: Int) {
+        val clamped = minutes.coerceIn(5, 60)
+        updateState { it.copy(prayerReminderMinutesBefore = clamped) }
+        val cur = _state.value
+        if (cur.prayerReminderEnabled) {
+            PrayerReminderScheduler.scheduleNext(getApplication(), cur)
+            showToast(strings.toastReminderOnFmt(clamped.formatDigits(strings.isArabic)))
+        }
+    }
+
+    fun syncPrayerReminderSchedule() {
+        val cur = _state.value
+        if (cur.prayerReminderEnabled) {
+            PrayerReminderScheduler.scheduleNext(getApplication(), cur)
+        }
     }
 
     fun setQuranLineHeight(multiplier: Float) {

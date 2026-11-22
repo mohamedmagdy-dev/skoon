@@ -65,8 +65,15 @@ fun HomeScreen(
         }
     }
 
-    val prayerInfo = remember(nowMillis / 60_000, state.prayerCityId) {
-        PrayerTimesCalculator.getNextPrayer(state.prayerCityId, nowMillis)
+    val prayerInfo = remember(
+        nowMillis / 60_000,
+        state.prayerCityId,
+        state.useGpsLocation,
+        state.customLat,
+        state.customLng,
+        state.customLocationLabel
+    ) {
+        PrayerTimesCalculator.getNextPrayerForState(state, nowMillis)
     }
 
     val timeStr = remember(nowMillis) {
