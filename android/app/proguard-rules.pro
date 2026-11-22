@@ -13,3 +13,10 @@
 -keepclasseswithmembers class com.sukoon.launcher.data.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+-keep,includedescriptorclasses class com.sukoon.launcher.service.**$$serializer { *; }
+-keepclassmembers class com.sukoon.launcher.service.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.sukoon.launcher.service.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}

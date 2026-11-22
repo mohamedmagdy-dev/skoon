@@ -119,6 +119,15 @@ class SukoonRepository(private val context: Context) {
             updated = updated.copy(pageConfig = list)
         }
 
+        // Ensure "notifications" (Focus Inbox) tab is present if migrating from older saved state
+        if (updated.pageConfig.none { it.id == "notifications" }) {
+            val list = updated.pageConfig.toMutableList()
+            val hIdx = list.indexOfFirst { it.id == "home" }
+            val insertAt = if (hIdx != -1) hIdx else 0
+            list.add(insertAt, PageConfig("notifications", true))
+            updated = updated.copy(pageConfig = list)
+        }
+
         if (state.lastWirdDate.isNotEmpty() && state.lastWirdDate != today) {
             updated = updated.copy(
                 wirdDoneToday = false,

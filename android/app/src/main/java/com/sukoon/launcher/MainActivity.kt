@@ -295,6 +295,13 @@ class MainActivity : ComponentActivity() {
                             onRequestLocation = { requestUserLocation() },
                             onTogglePrayerReminder = { togglePrayerReminderWithPermission(it) },
                             onSetBlackScreenWindow = { enabled -> setBlackScreenMode(enabled) },
+                            onOpenNotificationAccess = {
+                                try {
+                                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                                } catch (_: Exception) {
+                                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                                }
+                            },
                             onOpenAccessibility = {
                                 try {
                                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -320,6 +327,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         viewModel.refreshApps()
         viewModel.refreshVolumes()
+        viewModel.refreshNotificationAccess()
         viewModel.syncPrayerReminderSchedule()
     }
 
@@ -345,6 +353,7 @@ private fun SukoonLauncherRoot(
     onRequestLocation: () -> Unit,
     onTogglePrayerReminder: (Boolean) -> Unit,
     onSetBlackScreenWindow: (Boolean) -> Unit,
+    onOpenNotificationAccess: () -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenDefaultHome: () -> Unit
 ) {
@@ -363,6 +372,8 @@ private fun SukoonLauncherRoot(
     val pomoModeKey by viewModel.pomoModeKey.collectAsState()
     val pomoRunning by viewModel.pomoRunning.collectAsState()
     val isAccConnected by viewModel.isAccessibilityConnected.collectAsState()
+    val capturedNotifications by viewModel.capturedNotifications.collectAsState()
+    val isNotifAccessGranted by viewModel.isNotificationAccessGranted.collectAsState()
     val pageLayoutDir = if (strings.isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     var showDrawer by remember { mutableStateOf(false) }
@@ -508,6 +519,18 @@ private fun SukoonLauncherRoot(
                                 onNewDay = { viewModel.resetHabitsNewDay() }
                             )
 
+                            "notifications" -> NotificationsScreen(
+                                state = state,
+                                notifications = capturedNotifications,
+                                isNotificationAccessGranted = isNotifAccessGranted,
+                                onLoadAppIcon = { viewModel.loadAppIcon(it) },
+                                onOpenNotificationAccessSettings = onOpenNotificationAccess,
+                                onToggleFocus = { viewModel.toggleFocusMode() },
+                                onOpenNotificationApp = { viewModel.openCapturedNotificationApp(it) },
+                                onDismissNotification = { viewModel.dismissCapturedNotification(it) },
+                                onClearAll = { viewModel.clearCapturedNotifications() }
+                            )
+
                             "notes" -> NotesScreen(
                                 state = state,
                                 onCreateNote = { viewModel.createNote() },
@@ -599,6 +622,7 @@ private fun SukoonLauncherRoot(
                 state = state,
                 volumes = volumes,
                 isAccessibilityConnected = isAccConnected,
+                isNotificationAccessGranted = isNotifAccessGranted,
                 isLocating = isLocating,
                 onSetLanguage = { viewModel.setAppLanguage(it) },
                 onSetAppFont = { viewModel.setAppFont(it) },
@@ -617,6 +641,7 @@ private fun SukoonLauncherRoot(
                 onRefreshVolumes = { viewModel.refreshVolumes() },
                 onSetVolume = { s, v -> viewModel.setStreamVolume(s, v) },
                 onToggleMute = { viewModel.toggleMuteAll() },
+                onOpenNotificationAccessSettings = onOpenNotificationAccess,
                 onOpenAccessibilitySettings = onOpenAccessibility,
                 onOpenDefaultLauncherSettings = onOpenDefaultHome,
                 onRestartSetup = { viewModel.restartSetup() },

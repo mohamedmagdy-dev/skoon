@@ -420,6 +420,7 @@ fun SettingsOverlay(
     state: LauncherState,
     volumes: VolumeLevels,
     isAccessibilityConnected: Boolean,
+    isNotificationAccessGranted: Boolean,
     isLocating: Boolean,
     onSetLanguage: (String) -> Unit,
     onSetAppFont: (String) -> Unit,
@@ -438,6 +439,7 @@ fun SettingsOverlay(
     onRefreshVolumes: () -> Unit,
     onSetVolume: (Int, Int) -> Unit,
     onToggleMute: () -> Unit,
+    onOpenNotificationAccessSettings: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onOpenDefaultLauncherSettings: () -> Unit,
     onRestartSetup: () -> Unit,
@@ -1018,6 +1020,28 @@ fun SettingsOverlay(
                             Box(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
                                 VolumeControlCard(volumes = volumes, onSetVolume = onSetVolume, onToggleMute = onToggleMute)
                             }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                        // Focus Notification Shield Permission
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenNotificationAccessSettings() }
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(strings.notifAccessSettingsTitle, fontFamily = appFont, fontSize = 14.sp, color = colors.textPrimary)
+                                Text(
+                                    text = if (isNotificationAccessGranted) strings.notifAccessActive else strings.notifAccessPrompt,
+                                    fontFamily = appFont,
+                                    fontSize = 11.sp,
+                                    color = if (isNotificationAccessGranted) colors.accentFocus else colors.accentWarm
+                                )
+                            }
+                            Text(strings.openChevron, fontFamily = appFont, fontSize = 12.sp, color = colors.textSecondary)
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
 

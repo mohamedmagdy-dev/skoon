@@ -11,8 +11,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sukoon.launcher.data.*
+import com.sukoon.launcher.service.CapturedNotification
 import com.sukoon.launcher.service.PrayerReminderScheduler
 import com.sukoon.launcher.service.SukoonAccessibilityService
+import com.sukoon.launcher.service.SukoonNotificationService
 import com.sukoon.launcher.ui.theme.fontOptionFor
 import com.sukoon.launcher.ui.theme.stringsFor
 import kotlinx.coroutines.Dispatchers
@@ -92,9 +94,16 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     val isAccessibilityConnected = SukoonAccessibilityService.isServiceConnected
     val isFingerprintGestureAvailable = SukoonAccessibilityService.isFingerprintGestureAvailable
 
+    // Focus Mode Notification Shield
+    val capturedNotifications = SukoonNotificationService.captured
+    private val _isNotificationAccessGranted = MutableStateFlow(SukoonNotificationService.isPermissionGranted(app))
+    val isNotificationAccessGranted: StateFlow<Boolean> = _isNotificationAccessGranted.asStateFlow()
+
     private var toastJob: Job? = null
 
     init {
+        SukoonNotificationService.setFocusModeFlag(app, _state.value.focusMode)
+        SukoonNotificationService.loadPersisted(app)
         refreshApps()
         viewModelScope.launch {
             _quranPages.value = repo.loadQuranPages()
@@ -359,7 +368,26 @@ class SukoonViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleFocusMode(force: Boolean? = null) {
         val target = force ?: !_state.value.focusMode
         updateState { it.copy(focusMode = target) }
+        SukoonNotificationService.setFocusModeFlag(getApplication(), target)
         showToast(if (target) strings.toastFocusEnabled else strings.toastFocusDisabled)
+    }
+
+    fun refreshNotificationAccess() {
+        _isNotificationAccessGranted.value = SukoonNotificationService.isPermissionGranted(getApplication())
+        SukoonNotificationService.setFocusModeFlag(getApplication(), _state.value.focusMode)
+    }
+
+    fun dismissCapturedNotification(id: String) {
+        SukoonNotificationService.removeItem(getApplication(), id)
+    }
+
+    fun clearCapturedNotifications() {
+        SukoonNotificationService.clearAll(getApplication())
+    }
+
+    fun openCapturedNotificationApp(item: CapturedNotification) {
+        SukoonNotificationService.removeItem(getApplication(), item.id)
+        repo.launchApp(item.packageName)
     }
 
     // ===== Page Ordering =====
